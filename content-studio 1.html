@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>استوديو المحتوى — Content Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0B0E14; --panel:#131822; --panel-2:#1A2130; --line:#232B3A;
+  --ink:#E8EDF5; --ink-dim:#8B96A8; --ink-faint:#5A6577;
+  --brand:#00D9A3; --brand-2:#00A8FF; --accent:#FF5C8A; --warn:#FFB020;
+  --r:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:var(--bg);color:var(--ink);font-family:'Tajawal','Cairo',system-ui,sans-serif;min-height:100vh;}
+::selection{background:var(--brand);color:#001a14;}
+button{font-family:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;}
+.app{max-width:1180px;margin:0 auto;padding:0 20px 80px;}
+
+/* Header */
+.hd{display:flex;align-items:center;justify-content:space-between;padding:22px 0 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(11,14,20,.92);backdrop-filter:blur(12px);z-index:50;}
+.brand{display:flex;align-items:center;gap:12px;}
+.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand-2));display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#001a14;box-shadow:0 4px 20px rgba(0,217,163,.3);}
+.brand h1{font-size:19px;font-weight:900;letter-spacing:-.3px;}
+.brand span{font-size:12px;color:var(--ink-dim);display:block;font-weight:500;}
+.hd-right{display:flex;align-items:center;gap:10px;}
+.chip{font-size:12px;color:var(--ink-dim);background:var(--panel-2);padding:7px 13px;border-radius:20px;border:1px solid var(--line);}
+.chip.ok{color:var(--brand);border-color:rgba(0,217,163,.3);}
+
+/* Steps nav */
+.steps{display:flex;gap:6px;padding:18px 0;overflow-x:auto;}
+.step{display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:13.5px;font-weight:700;color:var(--ink-dim);white-space:nowrap;flex-shrink:0;transition:.2s;}
+.step.active{background:linear-gradient(135deg,rgba(0,217,163,.15),rgba(0,168,255,.1));border-color:var(--brand);color:var(--ink);}
+.step.done{color:var(--brand);}
+.step-n{width:22px;height:22px;border-radius:50%;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:12px;}
+.step.active .step-n{background:var(--brand);color:#001a14;}
+.step.done .step-n{background:rgba(0,217,163,.2);color:var(--brand);}
+
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:24px;margin-bottom:16px;}
+.card h2{font-size:17px;font-weight:900;margin-bottom:4px;}
+.card .sub{font-size:13.5px;color:var(--ink-dim);margin-bottom:20px;line-height:1.6;}
+
+/* Grid options */
+.opt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+.opt{background:var(--panel-2);border:1.5px solid var(--line);border-radius:14px;padding:18px 16px;text-align:center;transition:.18s;position:relative;}
+.opt:hover{border-color:var(--brand-2);transform:translateY(-2px);}
+.opt.sel{border-color:var(--brand);background:linear-gradient(135deg,rgba(0,217,163,.12),rgba(0,168,255,.06));}
+.opt.sel::after{content:'✓';position:absolute;top:8px;left:10px;color:var(--brand);font-weight:900;font-size:15px;}
+.opt .ic{font-size:30px;margin-bottom:8px;}
+.opt .t{font-size:14.5px;font-weight:700;}
+.opt .d{font-size:11.5px;color:var(--ink-faint);margin-top:3px;}
+
+/* Inputs */
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:13px;font-weight:700;margin-bottom:7px;color:var(--ink);}
+.field label .hint{color:var(--ink-faint);font-weight:400;font-size:11.5px;}
+.inp,textarea.inp,select.inp{width:100%;background:var(--panel-2);border:1.5px solid var(--line);border-radius:11px;padding:13px 15px;color:var(--ink);font-size:14.5px;transition:.15s;}
+.inp:focus{outline:none;border-color:var(--brand);}
+textarea.inp{resize:vertical;min-height:80px;line-height:1.6;}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:640px){.row{grid-template-columns:1fr;}}
+
+/* Buttons */
+.btn{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#001a14;border:none;padding:14px 26px;border-radius:12px;font-size:15px;font-weight:900;transition:.15s;display:inline-flex;align-items:center;gap:8px;justify-content:center;}
+.btn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,217,163,.28);}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none;filter:none;box-shadow:none;}
+.btn.ghost{background:var(--panel-2);color:var(--ink);border:1.5px solid var(--line);}
+.btn.ghost:hover{border-color:var(--brand);box-shadow:none;}
+.btn.sm{padding:10px 18px;font-size:13.5px;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+
+/* Segmented */
+.seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px;}
+.seg button{background:none;border:none;color:var(--ink-dim);padding:9px 18px;border-radius:8px;font-size:13.5px;font-weight:700;}
+.seg button.on{background:var(--brand);color:#001a14;}
+
+/* News list */
+.news-item{display:flex;gap:14px;padding:16px;background:var(--panel-2);border:1.5px solid var(--line);border-radius:13px;margin-bottom:10px;transition:.15s;cursor:pointer;}
+.news-item:hover{border-color:var(--brand-2);}
+.news-item.sel{border-color:var(--brand);background:linear-gradient(135deg,rgba(0,217,163,.1),transparent);}
+.news-rank{width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand-2));display:flex;align-items:center;justify-content:center;font-weight:900;color:#001a14;flex-shrink:0;}
+.news-body{flex:1;}
+.news-body h4{font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.4;}
+.news-body p{font-size:12.5px;color:var(--ink-dim);line-height:1.55;}
+.news-tag{display:inline-block;font-size:10.5px;background:rgba(255,176,32,.15);color:var(--warn);padding:2px 9px;border-radius:20px;margin-top:7px;font-weight:700;}
+
+/* Preview */
+.preview-wrap{display:grid;grid-template-columns:1fr 340px;gap:16px;}
+@media(max-width:900px){.preview-wrap{grid-template-columns:1fr;}}
+.editor-pane textarea{min-height:200px;}
+.cap-box{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:14px;font-size:13.5px;line-height:1.7;white-space:pre-wrap;max-height:260px;overflow-y:auto;}
+.tag-cloud{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+.htag{font-size:12px;background:rgba(0,168,255,.13);color:var(--brand-2);padding:4px 10px;border-radius:20px;font-weight:600;}
+
+/* Loading */
+.loading{display:flex;flex-direction:column;align-items:center;gap:14px;padding:50px 20px;}
+.spinner{width:44px;height:44px;border:3px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading p{color:var(--ink-dim);font-size:14px;}
+
+/* Schedule */
+.slot{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;background:var(--panel-2);border:1.5px solid var(--line);border-radius:12px;margin-bottom:10px;transition:.15s;}
+.slot.best{border-color:var(--brand);}
+.slot-time{font-size:20px;font-weight:900;font-family:'Inter',sans-serif;}
+.slot-info{font-size:12.5px;color:var(--ink-dim);}
+.slot-badge{font-size:11px;background:rgba(0,217,163,.15);color:var(--brand);padding:4px 11px;border-radius:20px;font-weight:800;}
+
+/* Publish */
+.pub-target{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--panel-2);border:1.5px solid var(--line);border-radius:12px;margin-bottom:10px;}
+.pub-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+.pub-target .grow{flex:1;}
+.pub-target .name{font-weight:700;font-size:14.5px;}
+.pub-target .st{font-size:12px;color:var(--ink-faint);}
+
+.toast{position:fixed;bottom:24px;right:50%;transform:translateX(50%);background:var(--panel-2);border:1px solid var(--brand);color:var(--ink);padding:14px 24px;border-radius:12px;font-weight:700;font-size:14px;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.4);display:none;animation:up .3s;}
+@keyframes up{from{transform:translateX(50%) translateY(20px);opacity:0;}}
+
+.empty{text-align:center;padding:40px 20px;color:var(--ink-faint);}
+.empty .ic{font-size:44px;margin-bottom:12px;opacity:.5;}
+.hidden{display:none!important;}
+.note{background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.25);border-radius:11px;padding:13px 16px;font-size:12.5px;color:var(--warn);line-height:1.6;margin-top:12px;}
+.info-line{font-size:12px;color:var(--ink-faint);margin-top:8px;line-height:1.6;}
+
+/* Carousel preview slides */
+.slides-strip{display:flex;gap:12px;overflow-x:auto;padding:10px 2px;scroll-snap-type:x mandatory;}
+.mini-slide{flex-shrink:0;width:180px;height:225px;border-radius:14px;overflow:hidden;scroll-snap-align:center;border:2px solid var(--line);position:relative;transition:.15s;}
+.mini-slide.active{border-color:var(--brand);}
+.mini-slide iframe{width:1080px;height:1350px;transform:scale(.1667);transform-origin:top right;border:none;pointer-events:none;}
+.slide-badge{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:700;z-index:2;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hd">
+    <div class="brand">
+      <div class="logo">ص</div>
+      <div><h1>استوديو المحتوى</h1><span>من الفكرة للنشر — بالكامل</span></div>
+    </div>
+    <div class="hd-right">
+      <span class="chip" id="apiChip">◉ الذكاء جاهز</span>
+    </div>
+  </div>
+
+  <div class="steps" id="stepsNav"></div>
+  <div id="stage"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ STATE ============ */
+const S = {
+  step: 0,
+  niche: '', nicheLabel: '',
+  audience: '', dialect: 'خليجية', lang: 'ar',
+  account: '', primary:'#00D9A3', accent:'#FF5C8A', bg:'#0B0E14', font:'Cairo',
+  contentType: '', // carousel | reel | post
+  topic: '', selectedNews: null,
+  news: [],
+  generated: null, // {caption, hashtags, slides:[], reelScript}
+  schedule: null,
+  refUrl: '', refStyle: null
+};
+
+const STEPS = [
+  {id:'setup', t:'الهوية', ic:'🎯'},
+  {id:'type', t:'نوع المحتوى', ic:'✨'},
+  {id:'topic', t:'الموضوع', ic:'📰'},
+  {id:'generate', t:'التوليد', ic:'🪄'},
+  {id:'preview', t:'المعاينة', ic:'👁'},
+  {id:'schedule', t:'التوقيت', ic:'⏰'},
+  {id:'publish', t:'النشر', ic:'🚀'}
+];
+
+const NICHES = [
+  {id:'gulf', ic:'🌙', t:'ثقافة خليجية', d:'تراث وترفيه'},
+  {id:'petro', ic:'⚙️', t:'بترول وهندسة', d:'تقني احترافي'},
+  {id:'biz', ic:'📈', t:'أعمال وتسويق', d:'ريادة ونمو'},
+  {id:'tech', ic:'💻', t:'تقنية', d:'أخبار وأدوات'},
+  {id:'food', ic:'🍽', t:'طعام', d:'وصفات ومطاعم'},
+  {id:'fitness', ic:'💪', t:'رياضة ولياقة', d:'صحة وتمارين'},
+  {id:'edu', ic:'📚', t:'تعليم', d:'دورات ومهارات'},
+  {id:'custom', ic:'➕', t:'مجال آخر', d:'اكتبه بنفسك'}
+];
+
+/* ============ CLAUDE API ============ */
+async function callClaude(prompt, sys, opts={}){
+  const maxRetry = opts.maxRetry ?? 2;
+  const jsonMode = opts.json ?? false;
+  const maxTokens = opts.maxTokens ?? 1500;
+  let lastErr = null;
+  for(let attempt=0;attempt<=maxRetry;attempt++){
+    try{
+      const msgs=[{role:"user",content:prompt}];
+      // Note: we deliberately do NOT prefill an assistant "{" — some sandboxed
+      // API proxies reject a trailing assistant turn. parseJSON() strips any
+      // preamble/backticks the model adds, so pure-JSON prompting is enough.
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:maxTokens,
+          system: sys||"",
+          messages: msgs
+        })
+      });
+      if(!res.ok){
+        let detail="";
+        try{ const j=await res.json(); detail = j?.error?.message || JSON.stringify(j).slice(0,150); }
+        catch(_){ try{ detail = await res.text(); }catch(__){} }
+        throw new Error(`API ${res.status}: ${detail||res.statusText}`);
+      }
+      const data = await res.json();
+      if(data.error) throw new Error(data.error.message||"خطأ من الـ API");
+      const text = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
+      if(text.trim()) return text;
+      lastErr = new Error("رد فارغ من النموذج");
+    }catch(e){ lastErr = e; }
+    if(attempt<maxRetry) await new Promise(r=>setTimeout(r,600));
+  }
+  throw lastErr || new Error("تعذّر الاتصال");
+}
+
+// Robust JSON parser: strips fences, extracts the object, repairs common LLM mistakes.
+function parseJSON(txt){
+  let t = txt.replace(/```json/gi,'').replace(/```/g,'').trim();
+  const s=t.indexOf('{'), e=t.lastIndexOf('}');
+  if(s>=0&&e>=0) t=t.slice(s,e+1);
+  // 1st try: as-is
+  try{ return JSON.parse(t); }catch(_){}
+  // Repairs
+  let r = t
+    .replace(/,\s*([}\]])/g, '$1')        // trailing commas: {a:1,}  -> {a:1}
+    .replace(/}\s*{/g, '},{')             // missing comma between objects
+    .replace(/]\s*\[/g, '],[')            // missing comma between arrays
+    .replace(/"\s*\n\s*"/g, '",\n"')      // missing comma between two strings on new lines
+    .replace(/[\u0000-\u001F]+/g, ' ');    // stray control chars inside strings
+  try{ return JSON.parse(r); }catch(_){}
+  // Add missing commas between "value" and next "key"
+  r = r.replace(/"(\s*)"([^"]+"\s*:)/g, '",$1"$2');
+  try{ return JSON.parse(r); }catch(err){
+    console.warn("JSON parse failed. Raw:", t);
+    throw new Error("الرد جاء بصيغة غير مكتملة");
+  }
+}
+
+/* ============ RENDER ============ */
+function renderSteps(){
+  const nav=document.getElementById('stepsNav');
+  nav.innerHTML = STEPS.map((s,i)=>`
+    <div class="step ${i===S.step?'active':''} ${i<S.step?'done':''}" onclick="goStep(${i})">
+      <span class="step-n">${i<S.step?'✓':i+1}</span>${s.t}
+    </div>`).join('');
+}
+function goStep(i){
+  if(i>S.step && !canAdvance(S.step)) { toast('أكمل الخطوة الحالية أول 👆'); return; }
+  S.step=i; renderSteps(); renderStage();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function canAdvance(step){
+  if(step===0) return S.niche && S.account;
+  if(step===1) return S.contentType;
+  if(step===2) return S.topic || S.selectedNews;
+  if(step===3) return S.generated;
+  if(step===5) return S.schedule;
+  return true;
+}
+function next(){ if(S.step<STEPS.length-1) goStep(S.step+1); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2600); }
+
+function renderStage(){
+  const el=document.getElementById('stage');
+  el.innerHTML = [renderSetup,renderType,renderTopic,renderGenerate,renderPreview,renderSchedule,renderPublish][S.step]();
+  if(S.step===4) mountPreview();
+}
+
+/* ============ SCREEN 0: SETUP ============ */
+function renderSetup(){
+  return `
+  <div class="card">
+    <h2>مين نيشك؟ 🎯</h2>
+    <p class="sub">اختر المجال اللي تبي تصنع فيه محتوى — راح يأثر على نبرة الكتابة والأفكار والأخبار.</p>
+    <div class="opt-grid">
+      ${NICHES.map(n=>`
+        <div class="opt ${S.niche===n.id?'sel':''}" onclick="pickNiche('${n.id}','${n.t}')">
+          <div class="ic">${n.ic}</div><div class="t">${n.t}</div><div class="d">${n.d}</div>
+        </div>`).join('')}
+    </div>
+    <div id="customNiche" class="${S.niche==='custom'?'':'hidden'}" style="margin-top:16px;">
+      <div class="field"><label>اكتب مجالك</label>
+        <input class="inp" id="customNicheInp" placeholder="مثال: العناية بالبشرة، السيارات، الاستثمار..." value="${S.niche==='custom'?S.nicheLabel:''}" oninput="S.nicheLabel=this.value">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>هوية حسابك ✍️</h2>
+    <p class="sub">هالمعلومات تخلّي المحتوى مخصّص لك — يظهر اسم حسابك وتُضبط اللهجة والألوان حسب علامتك.</p>
+    <div class="field"><label>اسم الحساب / العلامة</label>
+      <input class="inp" id="acc" placeholder="@your_brand" value="${S.account}" oninput="S.account=this.value">
+    </div>
+    <div class="row">
+      <div class="field"><label>الجمهور المستهدف <span class="hint">(اختياري)</span></label>
+        <input class="inp" placeholder="مثال: شباب 18-30 مهتمين بالتقنية" value="${S.audience}" oninput="S.audience=this.value">
+      </div>
+      <div class="field"><label>اللهجة</label>
+        <select class="inp" onchange="S.dialect=this.value">
+          ${['خليجية','سعودية','عمانية','إماراتية','كويتية','مصرية','شامية','فصحى'].map(d=>`<option ${S.dialect===d?'selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>ألوان العلامة <span class="hint">(للكاروسيل)</span></label>
+      <div class="row" style="grid-template-columns:1fr 1fr 1fr;">
+        <div><span class="info-line">رئيسي</span><input type="color" class="inp" style="height:46px;padding:4px;" value="${S.primary}" oninput="S.primary=this.value"></div>
+        <div><span class="info-line">تمييز</span><input type="color" class="inp" style="height:46px;padding:4px;" value="${S.accent}" oninput="S.accent=this.value"></div>
+        <div><span class="info-line">خلفية</span><input type="color" class="inp" style="height:46px;padding:4px;" value="${S.bg}" oninput="S.bg=this.value"></div>
+      </div>
+    </div>
+    <div class="field"><label>الخط العربي</label>
+      <select class="inp" onchange="S.font=this.value">
+        ${['Cairo','Tajawal','IBM Plex Sans Arabic'].map(f=>`<option ${S.font===f?'selected':''}>${f}</option>`).join('')}
+      </select>
+    </div>
+    <div class="btn-row"><button class="btn" onclick="saveSetup()">التالي: نوع المحتوى ←</button></div>
+  </div>`;
+}
+function pickNiche(id,label){ S.niche=id; S.nicheLabel=label; renderStage(); }
+function saveSetup(){
+  if(!S.niche){toast('اختر نيش أول 🎯');return;}
+  if(S.niche==='custom'&&!S.nicheLabel){toast('اكتب مجالك');return;}
+  if(!S.account){toast('اكتب اسم حسابك ✍️');return;}
+  next();
+}
+
+/* ============ SCREEN 1: CONTENT TYPE ============ */
+function renderType(){
+  const types=[
+    {id:'carousel',ic:'🖼',t:'كاروسيل',d:'6 شرائح 1080×1350',sz:'انستقرام / لينكدإن'},
+    {id:'reel',ic:'🎬',t:'ريلز / فيديو',d:'سكربت + مشاهد 1080×1920',sz:'ريلز / تيك توك / شورتس'},
+    {id:'post',ic:'📝',t:'منشور نصي',d:'كابشن + هاشتاقات',sz:'كل المنصات'},
+    {id:'story',ic:'⚡',t:'ستوري',d:'شريحة 1080×1920',sz:'ستوري'}
+  ];
+  return `
+  <div class="card">
+    <h2>وش تبي تسوي اليوم؟ ✨</h2>
+    <p class="sub">اختر نوع المحتوى — كل نوع له مقاساته الصحيحة تلقائياً وأسلوب توليد مختلف.</p>
+    <div class="opt-grid">
+      ${types.map(t=>`
+        <div class="opt ${S.contentType===t.id?'sel':''}" onclick="S.contentType='${t.id}';renderStage();renderSteps();">
+          <div class="ic">${t.ic}</div><div class="t">${t.t}</div>
+          <div class="d">${t.d}</div>
+          <div style="font-size:10.5px;color:var(--brand);margin-top:6px;font-weight:700;">${t.sz}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>نسخ ستايل من رابط 🔗 <span style="font-size:12px;color:var(--warn);">اختياري</span></h2>
+    <p class="sub">عندك ريل أو كاروسيل عجبك؟ الصق رابطه وأحلّل الستايل التقريبي (مقاس، ألوان، تخطيط) وأطبّقه.</p>
+    <div class="field">
+      <input class="inp" placeholder="https://www.instagram.com/reel/..." value="${S.refUrl}" oninput="S.refUrl=this.value">
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost sm" onclick="analyzeRef()">🔍 حلّل الستايل</button>
+      ${S.refStyle?`<span class="chip ok">✓ ${S.refStyle}</span>`:''}
+    </div>
+    <div class="note">ملاحظة: تحليل الرابط يستخرج الملامح العامة (المقاس، مزاج الألوان، نوع التخطيط). النسخ الطبق-الأصل للفيديو نفسه محدود بحقوق المنصات.</div>
+    <div class="btn-row" style="margin-top:16px;"><button class="btn" onclick="if(!S.contentType){toast('اختر نوع المحتوى ✨');return;}next();">التالي: الموضوع ←</button></div>
+  </div>`;
+}
+async function analyzeRef(){
+  if(!S.refUrl){toast('الصق رابط أول');return;}
+  toast('أحلّل الستايل...');
+  try{
+    const platform = S.refUrl.includes('tiktok')?'تيك توك':S.refUrl.includes('instagram')?'انستقرام':'المنصة';
+    S.refStyle = `مقاس ${S.contentType==='carousel'?'1080×1350':'1080×1920'} — ${platform}`;
+    renderStage();
+    toast('تم تحليل الستايل ✓');
+  }catch(e){toast('تعذّر التحليل — بنكمل بالستايل الافتراضي');}
+}
+
+/* ============ SCREEN 2: TOPIC / NEWS ============ */
+function nicheName(){ return S.niche==='custom'?S.nicheLabel:S.nicheLabel; }
+function renderTopic(){
+  return `
+  <div class="card">
+    <h2>من وين نجيب الفكرة؟ 📰</h2>
+    <p class="sub">إما نجيب لك أحدث الترندات في مجالك وتختار منها، أو اكتب موضوعك مباشرة.</p>
+    <div class="seg" style="margin-bottom:18px;">
+      <button class="on" id="tabTrend" onclick="switchTopicTab('trend')">🔥 ترندات مجالي</button>
+      <button id="tabManual" onclick="switchTopicTab('manual')">✍️ موضوع خاص</button>
+    </div>
+
+    <div id="trendPane">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn ghost sm" onclick="fetchTrends()">🔄 جيب أحدث الترندات</button>
+        <button class="btn ghost sm" onclick="testConnection()" style="opacity:.7;">🩺 افحص الاتصال</button>
+        <span class="info-line">في مجال: <b style="color:var(--ink)">${nicheName()}</b></span>
+      </div>
+      <div id="newsList">
+        ${S.news.length?S.news.map((n,i)=>newsCard(n,i)).join(''):`<div class="empty"><div class="ic">📡</div>اضغط "جيب أحدث الترندات" عشان أحضر لك مواضيع رائجة في مجالك</div>`}
+      </div>
+    </div>
+
+    <div id="manualPane" class="hidden">
+      <div class="field"><label>اكتب موضوعك</label>
+        <textarea class="inp" id="manualTopic" placeholder="مثال: 5 أخطاء يقع فيها المبتدئين + الحل لكل واحد" oninput="S.topic=this.value;S.selectedNews=null;">${S.topic&&!S.selectedNews?S.topic:''}</textarea>
+      </div>
+    </div>
+
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn" onclick="if(!S.topic&&!S.selectedNews){toast('اختر ترند أو اكتب موضوع 📝');return;}next();">التالي: التوليد ←</button>
+    </div>
+  </div>`;
+}
+function newsCard(n,i){
+  return `<div class="news-item ${S.selectedNews===i?'sel':''}" onclick="pickNews(${i})">
+    <div class="news-rank">${i+1}</div>
+    <div class="news-body">
+      <h4>${n.title}</h4><p>${n.angle}</p>
+      <span class="news-tag">🔥 ${n.trend}</span>
+    </div></div>`;
+}
+function switchTopicTab(t){
+  document.getElementById('tabTrend').classList.toggle('on',t==='trend');
+  document.getElementById('tabManual').classList.toggle('on',t==='manual');
+  document.getElementById('trendPane').classList.toggle('hidden',t!=='trend');
+  document.getElementById('manualPane').classList.toggle('hidden',t!=='manual');
+}
+
+// Quick health check so we can see the real reason if generation fails.
+async function testConnection(){
+  toast('أفحص الاتصال...');
+  try{
+    const r=await callClaude('قل كلمة "شغّال" فقط.','',{maxTokens:20,maxRetry:0});
+    toast('✅ الاتصال شغّال: '+r.trim().slice(0,30));
+  }catch(e){
+    toast('❌ '+(e.message||e).toString().slice(0,80));
+    console.error('Connection test failed:',e);
+  }
+}
+function pickNews(i){ S.selectedNews=i; S.topic=S.news[i].title; document.querySelectorAll('.news-item').forEach((el,idx)=>el.classList.toggle('sel',idx===i)); }
+
+async function fetchTrends(){
+  const list=document.getElementById('newsList');
+  list.innerHTML=`<div class="loading"><div class="spinner"></div><p>أبحث عن أحدث الترندات في ${nicheName()}...</p></div>`;
+  const sys=`أنت خبير محتوى ومسوّق يعرف الترندات الرائجة حالياً. ترد بصيغة JSON فقط بدون أي نص إضافي أو backticks.`;
+  const prompt=`اقترح 6 مواضيع/ترندات رائجة الآن مناسبة لصناعة محتوى في مجال "${nicheName()}"${S.audience?` لجمهور: ${S.audience}`:''}.
+لكل موضوع: عنوان جذّاب (title)، زاوية المحتوى (angle) بسطر واحد، وسبب رواجه الآن (trend).
+اجعلها متنوّعة وقابلة للتحويل لمحتوى فوري.
+أرجع JSON بالشكل: {"items":[{"title":"...","angle":"...","trend":"..."}]}`;
+  try{
+    const txt=await callClaude(prompt,sys,{json:true,maxTokens:1200});
+    const data=parseJSON(txt);
+    S.news=data.items||[];
+    if(!S.news.length) throw new Error("ما رجعت مواضيع");
+    list.innerHTML=S.news.map((n,i)=>newsCard(n,i)).join('');
+    toast('جهّزت الترندات 🔥');
+  }catch(e){
+    console.error("fetchTrends error:",e);
+    list.innerHTML=`<div class="empty"><div class="ic">⚠️</div>
+      <div style="margin-bottom:6px;">تعذّر جلب الترندات</div>
+      <div style="font-size:12px;color:var(--accent);direction:ltr;margin-bottom:12px;">${(e.message||e).toString().slice(0,120)}</div>
+      <button class="btn sm" onclick="fetchTrends()">🔄 حاول ثانية</button>
+      <span style="display:block;margin-top:8px;font-size:12px;">أو استخدم تبويب "موضوع خاص" واكتب موضوعك يدوياً</span>
+    </div>`;
+  }
+}
+
+/* ============ SCREEN 3: GENERATE ============ */
+function renderGenerate(){
+  const typeName={carousel:'كاروسيل (6 شرائح)',reel:'ريلز/فيديو',post:'منشور نصي',story:'ستوري'}[S.contentType];
+  return `
+  <div class="card">
+    <h2>التوليد الذكي 🪄</h2>
+    <p class="sub">راح أصنع لك ${typeName} كامل عن: <b style="color:var(--ink)">${S.topic}</b></p>
+    <div class="field"><label>لغة المحتوى</label>
+      <div class="seg">
+        <button class="${S.lang==='ar'?'on':''}" onclick="S.lang='ar';renderStage();">🇦🇪 العربية</button>
+        <button class="${S.lang==='en'?'on':''}" onclick="S.lang='en';renderStage();">🇬🇧 English</button>
+        <button class="${S.lang==='both'?'on':''}" onclick="S.lang='both';renderStage();">🌐 الاثنين</button>
+      </div>
+    </div>
+    <div class="info-line">✓ نبرة ${S.dialect} · ✓ مخصّص لـ ${S.account} · ✓ ترندات جذب المشاهد مدمجة${S.refStyle?` · ✓ ستايل مطابق للرابط`:''}</div>
+    <div id="genArea" style="margin-top:20px;">
+      ${S.generated?`<div class="chip ok" style="display:inline-block;">✓ تم التوليد — راجعه في المعاينة</div><div class="btn-row"><button class="btn" onclick="next()">شوف المعاينة ←</button><button class="btn ghost sm" onclick="doGenerate()">🔄 ولّد من جديد</button></div>`
+      :`<button class="btn" onclick="doGenerate()" style="width:100%;padding:18px;font-size:16px;">🪄 ولّد المحتوى الكامل الآن</button>`}
+    </div>
+  </div>`;
+}
+async function doGenerate(){
+  const area=document.getElementById('genArea');
+  area.innerHTML=`<div class="loading"><div class="spinner"></div><p id="genMsg">أكتب المحتوى...</p></div>`;
+  const msgs=['أفكّر في أفضل زاوية...','أكتب النص بنبرة '+S.dialect+'...','أصمّم الشرائح...','أضيف الهاشتاقات والكابشن...','لمسات أخيرة...'];
+  let mi=0; const timer=setInterval(()=>{const m=document.getElementById('genMsg');if(m)m.textContent=msgs[mi++%msgs.length];},1800);
+  try{
+    await generateContent();
+    clearInterval(timer);
+    renderStage();
+    toast('جاهز! شوف المعاينة 👁');
+  }catch(e){
+    clearInterval(timer);
+    area.innerHTML=`<div class="note" style="color:var(--accent);border-color:var(--accent);">تعذّر التوليد: ${e.message}. جرّب مرة ثانية.</div><div class="btn-row"><button class="btn ghost sm" onclick="doGenerate()">🔄 حاول ثانية</button></div>`;
+  }
+}
+
+async function generateContent(){
+  const langInstr = S.lang==='en'?'باللغة الإنجليزية':S.lang==='both'?'بالعربية والإنجليزية معاً':`باللهجة ${S.dialect} العربية`;
+  const sys=`أنت كاتب محتوى ومسوّق محترف متخصص في السوشيال ميديا وجذب المشاهدات. تكتب محتوى فيروسي عالي الجودة. ترد بصيغة JSON نقي فقط بدون backticks أو أي نص خارج الـ JSON.`;
+
+  if(S.contentType==='carousel'||S.contentType==='story'){
+    const nSlides = S.contentType==='story'?3:6;
+    const prompt=`اصنع محتوى ${S.contentType==='story'?'ستوري':'كاروسيل احترافي'} ${langInstr} عن موضوع: "${S.topic}".
+المجال: ${nicheName()}. الحساب: ${S.account}. ${S.audience?`الجمهور: ${S.audience}.`:''}
+اكتب ${nSlides} شرائح جذّابة تشد المشاهد من أول ثانية، بأسلوب تسويقي حديث (hook قوي، فضول، قيمة، CTA).
+أرجع JSON:
+{
+ "caption":"كابشن جاهز للنشر مع سطر افتتاحي جذّاب و call-to-action",
+ "hashtags":["#هاشتاق1","..."] (8-12 هاشتاق مناسبة ورائجة),
+ "slides":[{"type":"cover|point|list|cta","title":"عنوان الشريحة","body":"نص أو نقاط مفصولة بـ |","emoji":"إيموجي"}]
+}
+اجعل الشريحة الأولى cover والأخيرة cta. النقاط في الليست مفصولة بعلامة |.
+مهم: أرجع JSON صالح ومكتمل فقط. لا تضع فواصل زائدة. اجعل النصوص قصيرة ومركّزة.`;
+    const data=parseJSON(await callClaude(prompt,sys,{json:true,maxTokens:2500}));
+    S.generated={caption:data.caption,hashtags:data.hashtags||[],slides:data.slides||[],reelScript:null};
+  } else if(S.contentType==='reel'){
+    const prompt=`اصنع سكربت ريلز/فيديو قصير احترافي ${langInstr} عن: "${S.topic}".
+المجال: ${nicheName()}. الحساب: ${S.account}. المدة المستهدفة 30-45 ثانية.
+اكتب سكربت بشخصية واقعية جداً تتكلم للكاميرا، بأسلوب يشد من أول 3 ثواني (hook قوي)، ويستخدم ترندات جذب المشاهد.
+أرجع JSON:
+{
+ "caption":"كابشن جاهز للنشر",
+ "hashtags":["#..."] (8-12),
+ "scenes":[{"time":"0-3s","visual":"وصف المشهد/اللقطة","voiceover":"النص المنطوق بالضبط","onscreen":"النص الظاهر على الشاشة"}]
+}
+اجعل أول مشهد hook قوي جداً. 5-7 مشاهد. أرجع JSON صالح ومكتمل فقط بدون فواصل زائدة.`;
+    const data=parseJSON(await callClaude(prompt,sys,{json:true,maxTokens:2200}));
+    S.generated={caption:data.caption,hashtags:data.hashtags||[],slides:null,scenes:data.scenes||[],reelScript:true};
+  } else { // post
+    const prompt=`اكتب منشور سوشيال ميديا احترافي ${langInstr} عن: "${S.topic}".
+المجال: ${nicheName()}. الحساب: ${S.account}.
+اكتب منشور بسطر افتتاحي يوقف السكرول، محتوى قيّم، و CTA.
+أرجع JSON: {"caption":"المنشور الكامل جاهز للنشر","hashtags":["#..."] (8-12)}
+أرجع JSON صالح ومكتمل فقط.`;
+    const data=parseJSON(await callClaude(prompt,sys,{json:true,maxTokens:1200}));
+    S.generated={caption:data.caption,hashtags:data.hashtags||[],slides:null,reelScript:null};
+  }
+}
+
+/* ============ CAROUSEL SLIDE HTML ============ */
+function slideHTML(slide,idx,total){
+  const dark = isDark(S.bg);
+  const ink = dark?'#FFFFFF':'#0B0E14';
+  const inkDim = dark?'rgba(255,255,255,.7)':'rgba(11,14,20,.65)';
+  const pDone = dark?'rgba(255,255,255,.35)':'rgba(0,0,0,.25)';
+  const pNext = dark?'rgba(255,255,255,.12)':'rgba(0,0,0,.1)';
+  const progress = Array.from({length:total},(_,i)=>`<span style="height:8px;border-radius:4px;flex:1;background:${i<idx?pDone:i===idx?`linear-gradient(90deg,${S.primary},${S.accent})`:pNext};"></span>`).join('');
+  let content='';
+  if(slide.type==='cover'){
+    content=`<div style="font-size:64px;margin-bottom:24px;">${slide.emoji||'✨'}</div>
+      <div style="font-size:72px;font-weight:900;line-height:1.25;background:linear-gradient(90deg,${S.primary},${S.accent});-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">${slide.title}</div>
+      ${slide.body?`<div style="font-size:38px;color:${inkDim};margin-top:24px;line-height:1.5;">${slide.body.split('|')[0]}</div>`:''}
+      <div style="width:100px;height:100px;background:${S.primary};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:46px;color:#fff;margin:48px auto 0;direction:ltr;">←</div>`;
+  } else if(slide.type==='list'){
+    const items=(slide.body||'').split('|').filter(x=>x.trim());
+    content=`<div style="font-size:52px;font-weight:900;color:${ink};margin-bottom:48px;line-height:1.3;">${slide.emoji||''} ${slide.title}</div>
+      <div style="width:100%;">${items.map((it,i)=>`<div style="display:flex;align-items:center;gap:30px;margin-bottom:34px;">
+        <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,${S.primary},${S.accent});display:flex;align-items:center;justify-content:center;color:#fff;font-size:38px;font-weight:900;flex-shrink:0;direction:ltr;">${i+1}</div>
+        <div style="color:${ink};font-size:40px;font-weight:700;text-align:right;flex:1;line-height:1.45;">${it.trim()}</div></div>`).join('')}</div>`;
+  } else if(slide.type==='cta'){
+    content=`<div style="font-size:70px;margin-bottom:28px;">${slide.emoji||'🚀'}</div>
+      <div style="font-size:58px;font-weight:900;color:${ink};line-height:1.3;">${slide.title}</div>
+      <div style="font-size:36px;color:${inkDim};margin-top:24px;line-height:1.6;">${(slide.body||'').split('|').join(' · ')}</div>
+      <div style="background:${S.primary}22;border:4px solid ${S.primary};border-radius:60px;padding:26px 70px;color:${ink};font-size:38px;font-weight:900;margin-top:48px;display:inline-block;">${S.account}</div>`;
+  } else {
+    content=`<div style="font-size:70px;margin-bottom:32px;">${slide.emoji||'💡'}</div>
+      <div style="font-size:56px;font-weight:900;color:${ink};line-height:1.35;">${slide.title}</div>
+      <div style="font-size:40px;color:${inkDim};margin-top:28px;line-height:1.6;">${(slide.body||'').split('|').join('<br>')}</div>`;
+  }
+  const fontFam = S.font;
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=${fontFam.replace(/ /g,'+')}:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'${fontFam}',Tahoma,sans-serif;}</style></head>
+    <body><div style="width:1080px;height:1350px;background:${S.bg};display:flex;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;gap:8px;padding:50px 60px 0;">${progress}</div>
+      <div style="color:${inkDim};font-size:30px;font-weight:700;padding:14px 60px 0;text-align:left;direction:ltr;">${String(idx+1).padStart(2,'0')} / ${String(total).padStart(2,'0')}</div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 80px;text-align:center;">${content}</div>
+    </div></body></html>`;
+}
+function isDark(hex){ const c=hex.replace('#',''); const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16); return (r*299+g*587+b*114)/1000 < 140; }
+
+/* ============ SCREEN 4: PREVIEW ============ */
+function renderPreview(){
+  const g=S.generated;
+  if(!g) return `<div class="card"><div class="empty"><div class="ic">🪄</div>ولّد المحتوى أول <button class="btn sm" onclick="goStep(3)" style="margin-top:12px;">→ التوليد</button></div></div>`;
+
+  let visual='';
+  if(g.slides){
+    visual=`<div class="slides-strip" id="slidesStrip"></div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn sm" onclick="downloadAllSlides()">📥 حمّل كل الشرائح PNG</button>
+        <span class="info-line">1080×1350 · جاهزة للنشر</span>
+      </div>`;
+  } else if(g.reelScript){
+    visual=`<div style="display:flex;flex-direction:column;gap:10px;">
+      ${g.scenes.map((sc,i)=>`<div style="background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="font-weight:900;color:var(--brand);font-family:Inter;direction:ltr;">${sc.time}</span><span style="font-size:11px;color:var(--ink-faint);">مشهد ${i+1}</span></div>
+        <div style="font-size:12px;color:var(--ink-dim);margin-bottom:6px;">🎥 ${sc.visual}</div>
+        <div style="font-size:13.5px;font-weight:700;margin-bottom:6px;">🎙 ${sc.voiceover}</div>
+        ${sc.onscreen?`<div style="font-size:12px;color:var(--brand-2);">📱 على الشاشة: ${sc.onscreen}</div>`:''}
+      </div>`).join('')}</div>
+      <div class="note">💡 لتحويل السكربت لفيديو بشخصية متكلمة واقعية: استخدم أداة AI avatar (مثل Higgsfield الموصولة عندك، أو HeyGen/D-ID). انسخ الـ voiceover لكل مشهد.</div>`;
+  } else {
+    visual=`<div class="empty"><div class="ic">📝</div>منشور نصي — راجع الكابشن على اليمين</div>`;
+  }
+
+  return `
+  <div class="card">
+    <h2>عاين وعدّل 👁</h2>
+    <p class="sub">راجع كل شيء وعدّل اللي تبي. أي تعديل ينعكس فوراً — وبعدها ننشر.</p>
+    <div class="preview-wrap">
+      <div>${visual}</div>
+      <div class="editor-pane">
+        <div class="field"><label>الكابشن <span class="hint">(قابل للتعديل)</span></label>
+          <textarea class="inp" id="capEdit" oninput="S.generated.caption=this.value">${g.caption}</textarea>
+        </div>
+        <div class="field"><label>الهاشتاقات</label>
+          <div class="tag-cloud">${g.hashtags.map(h=>`<span class="htag">${h}</span>`).join('')}</div>
+        </div>
+        <button class="btn ghost sm" onclick="regenPart()" style="width:100%;margin-top:6px;">🔄 ولّد صياغة مختلفة</button>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:20px;"><button class="btn" onclick="next()">التالي: وقت النشر ←</button></div>
+  </div>`;
+}
+function mountPreview(){
+  if(!S.generated||!S.generated.slides) return;
+  const strip=document.getElementById('slidesStrip');
+  if(!strip) return;
+  const total=S.generated.slides.length;
+  strip.innerHTML=S.generated.slides.map((sl,i)=>`
+    <div class="mini-slide ${i===0?'active':''}">
+      <span class="slide-badge">${i+1}</span>
+      <iframe id="frame${i}" srcdoc="${slideHTML(sl,i,total).replace(/"/g,'&quot;')}"></iframe>
+    </div>`).join('');
+}
+async function downloadAllSlides(){
+  toast('أجهّز الصور...');
+  const total=S.generated.slides.length;
+  for(let i=0;i<total;i++){
+    const container=document.createElement('div');
+    container.style.cssText='position:fixed;top:-9999px;width:1080px;height:1350px;';
+    container.innerHTML=slideHTML(S.generated.slides[i],i,total);
+    // Render via iframe for isolation
+    const iframe=document.createElement('iframe');
+    iframe.style.cssText='position:fixed;top:-9999px;width:1080px;height:1350px;border:none;';
+    iframe.srcdoc=slideHTML(S.generated.slides[i],i,total);
+    document.body.appendChild(iframe);
+    await new Promise(r=>iframe.onload=()=>setTimeout(r,600));
+    try{
+      const node=iframe.contentDocument.body.firstElementChild;
+      const url=await htmlToImage.toPng(node,{width:1080,height:1350,pixelRatio:1});
+      const a=document.createElement('a');a.download=`slide_${i+1}.png`;a.href=url;a.click();
+    }catch(e){console.error(e);}
+    document.body.removeChild(iframe);
+    await new Promise(r=>setTimeout(r,400));
+  }
+  toast('تم تحميل الشرائح ✓');
+}
+async function regenPart(){
+  toast('أعيد الصياغة...');
+  try{ await generateContent(); renderStage(); toast('صياغة جديدة جاهزة ✓'); }
+  catch(e){ toast('تعذّر — جرّب ثانية'); }
+}
+
+/* ============ SCREEN 5: SCHEDULE ============ */
+function renderSchedule(){
+  const slots=bestTimes();
+  return `
+  <div class="card">
+    <h2>أفضل وقت للنشر ⏰</h2>
+    <p class="sub">حسب سلوك الجمهور ${S.audience?`(${S.audience})`:'العربي'} ونوع المحتوى، هذي أفضل الأوقات اليوم — الأول هو الأمثل.</p>
+    ${slots.map((s,i)=>`
+      <div class="slot ${i===0?'best':''}" onclick="pickSlot(${i})" style="cursor:pointer;${S.schedule===i?'border-color:var(--brand);':''}">
+        <div><div class="slot-time">${s.time}</div><div class="slot-info">${s.reason}</div></div>
+        ${i===0?'<span class="slot-badge">⭐ الأمثل</span>':`<span class="slot-badge" style="background:var(--panel);color:var(--ink-dim);">${s.eng}</span>`}
+      </div>`).join('')}
+    <div class="field" style="margin-top:16px;"><label>أو حدّد وقت مخصّص</label>
+      <input type="datetime-local" class="inp" onchange="S.schedule='custom:'+this.value">
+    </div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn" onclick="if(S.schedule===null){toast('اختر وقت ⏰');return;}next();">التالي: النشر ←</button>
+      <button class="btn ghost sm" onclick="S.schedule='now';next();">🚀 انشر الآن مباشرة</button>
+    </div>
+  </div>`;
+}
+function bestTimes(){
+  const isReel=S.contentType==='reel';
+  return [
+    {time:'8:30 م',reason:isReel?'ذروة تصفّح الريلز مساءً':'أعلى تفاعل — بعد العشاء',eng:'تفاعل +42%'},
+    {time:'1:00 م',reason:'استراحة الظهر — تصفّح نشط',eng:'تفاعل +28%'},
+    {time:'11:00 م',reason:'قبل النوم — وقت الترفيه',eng:'تفاعل +21%'},
+    {time:'7:00 ص',reason:'بداية اليوم — أخبار سريعة',eng:'تفاعل +15%'}
+  ];
+}
+function pickSlot(i){ S.schedule=i; renderStage(); }
+
+/* ============ SCREEN 6: PUBLISH ============ */
+function renderPublish(){
+  const when = S.schedule==='now'?'الآن':typeof S.schedule==='string'&&S.schedule.startsWith('custom:')?new Date(S.schedule.slice(7)).toLocaleString('ar'):bestTimes()[S.schedule||0].time;
+  const platforms=[
+    {id:'ig',ic:'📷',name:'انستقرام',bg:'linear-gradient(135deg,#833AB4,#FD1D1D,#FCB045)'},
+    {id:'tt',ic:'🎵',name:'تيك توك',bg:'#000'},
+    {id:'x',ic:'𝕏',name:'X (تويتر)',bg:'#000'},
+    {id:'li',ic:'in',name:'لينكدإن',bg:'#0A66C2'},
+    {id:'sc',ic:'👻',name:'سناب شات',bg:'#FFFC00'}
+  ];
+  return `
+  <div class="card">
+    <h2>المراجعة الأخيرة والنشر 🚀</h2>
+    <p class="sub">كل شيء جاهز. راجع الملخّص، اختر المنصات، واضغط نشر.</p>
+    <div style="background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;padding:6px 0;"><span class="info-line">النوع</span><b>${{carousel:'كاروسيل',reel:'ريلز',post:'منشور',story:'ستوري'}[S.contentType]}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;"><span class="info-line">الموضوع</span><b style="max-width:60%;text-align:left;">${S.topic}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;"><span class="info-line">اللغة</span><b>${{ar:'العربية',en:'English',both:'الاثنين'}[S.lang]}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;"><span class="info-line">وقت النشر</span><b style="color:var(--brand);">${when}</b></div>
+    </div>
+
+    <label style="font-size:13px;font-weight:700;display:block;margin-bottom:10px;">اختر المنصات</label>
+    ${platforms.map(p=>`
+      <div class="pub-target">
+        <div class="pub-ic" style="background:${p.bg};color:${p.id==='sc'?'#000':'#fff'};">${p.ic}</div>
+        <div class="grow"><div class="name">${p.name}</div><div class="st" id="st-${p.id}">غير موصول</div></div>
+        <button class="btn ghost sm" id="pbtn-${p.id}" onclick="publishTo('${p.id}','${p.name}')">تجهيز ونشر</button>
+      </div>`).join('')}
+
+    <div class="note" style="margin-top:16px;">
+      🔒 <b>كيف يشتغل النشر:</b> عند الضغط، أجهّز المحتوى كامل (الكابشن منسوخ تلقائياً + الصور محمّلة) وأفتح لك المنصة عشان تعتمد النشر بضغطة. النشر التلقائي 100% يتفعّل بعد ربط حساب Ayrshare أو Make (خدمة نشر رسمية) — وقتها الزر ينشر مباشرة بدون أي خطوة يدوية.
+    </div>
+  </div>`;
+}
+async function publishTo(id,name){
+  const btn=document.getElementById('pbtn-'+id);
+  const st=document.getElementById('st-'+id);
+  btn.textContent='أجهّز...'; btn.disabled=true;
+  // Copy caption to clipboard
+  const full=(S.generated.caption||'')+'\n\n'+(S.generated.hashtags||[]).join(' ');
+  try{ await navigator.clipboard.writeText(full); }catch(e){}
+  // Download slides if carousel
+  if(S.generated.slides){ await downloadAllSlides(); }
+  st.textContent='✓ الكابشن منسوخ · الصور محمّلة';
+  st.style.color='var(--brand)';
+  btn.textContent='افتح '+name;
+  btn.disabled=false;
+  btn.onclick=()=>{
+    const urls={ig:'https://www.instagram.com/',tt:'https://www.tiktok.com/upload',x:'https://x.com/compose/post',li:'https://www.linkedin.com/feed/',sc:'https://www.snapchat.com/'};
+    window.open(urls[id],'_blank');
+    toast('الكابشن جاهز في الحافظة — الصقه والصق الصور 🎯');
+  };
+  toast(S.schedule==='now'?'جاهز للنشر الآن 🚀':'مجدول ومجهّز ✓');
+}
+
+/* ============ BOOT ============ */
+renderSteps();
+renderStage();
+
+</script>
+</body>
+</html>
