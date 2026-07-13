@@ -1,0 +1,478 @@
+{
+  "name": "Instagram Carousel Creator",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [-1120, 400],
+      "webhookId": "carousel-bot",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_TELEGRAM_CRED",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": false, "typeValidation": "loose" },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ ($json.message.text || '').trim() }}",
+                    "rightValue": "اعتمد",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "approve"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": false, "typeValidation": "loose" },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ ($json.message.text || '').trim() }}",
+                    "rightValue": "انشر",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "publish"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "topic"
+        }
+      },
+      "id": "router",
+      "name": "Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [-900, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $credentials?.anthropicApi?.apiKey || '' }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'claude-sonnet-4-6',\n  max_tokens: 1500,\n  system: 'أنت كاتب محتوى محترف لإنستقرام باللهجة العربية الواضحة. مهمتك تحويل الموضوع إلى كاروسيل من 6 سلايدات. أعد النتيجة كـ JSON فقط بدون أي نص إضافي بالشكل التالي: {\"slides\":[{\"title\":\"...\",\"body\":\"...\"}],\"caption\":\"...\"}. السلايد الأول Hook جذاب، السلايدات 2-5 محتوى قيّم، السلايد 6 دعوة لإجراء (CTA). اجعل title قصير (كلمتين-4 كلمات) و body جملة أو جملتين. الكابشن يحتوي على 3-5 هاشتاقات مناسبة.',\n  messages: [{ role: 'user', content: 'الموضوع: ' + ($json.message.text || '') }]\n}) }}",
+        "options": {}
+      },
+      "id": "generate-slides",
+      "name": "Generate Slides (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-680, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_ANTHROPIC_CRED",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsClass": "",
+        "jsCode": "// استخراج JSON من رد Claude بشكل متين\nconst raw = $input.first().json.content?.[0]?.text || '';\nlet t = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nconst s = t.indexOf('{'), e = t.lastIndexOf('}');\nif (s >= 0 && e >= 0) t = t.slice(s, e + 1);\nlet data;\ntry { data = JSON.parse(t); }\ncatch (err) {\n  t = t.replace(/,\\s*([}\\]])/g, '$1');\n  data = JSON.parse(t);\n}\nconst chatId = $('Telegram Trigger').first().json.message.chat.id;\nconst topic = $('Telegram Trigger').first().json.message.text || '';\nreturn [{ json: { chatId, topic, slides: data.slides || [], caption: data.caption || '' } }];"
+      },
+      "id": "parse-slides",
+      "name": "Parse Slides",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 200]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Drafts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatId": "={{ $json.chatId }}",
+            "topic": "={{ $json.topic }}",
+            "slides": "={{ JSON.stringify($json.slides) }}",
+            "caption": "={{ $json.caption }}",
+            "images": "",
+            "status": "drafted"
+          },
+          "matchingColumns": ["chatId"]
+        },
+        "options": {}
+      },
+      "id": "save-draft",
+      "name": "Save Draft",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-240, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_SHEETS_CRED",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=📝 *النص جاهز!*\n\n{{ $json.slides.map((s, i) => (i+1) + '. ' + s.title + '\\n   ' + s.body).join('\\n\\n') }}\n\n📄 الكابشن:\n{{ $json.caption }}\n\n———\nرد بـ *اعتمد* لتوليد الصور، أو أرسل موضوع جديد.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "send-draft",
+      "name": "Send Draft Text",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-20, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_TELEGRAM_CRED",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Drafts",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chatId",
+              "lookupValue": "={{ $json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-draft",
+      "name": "Get Draft",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-680, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_SHEETS_CRED",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// بناء HTML لكل سلايد (بنفسجي/وردي، خط Cairo، 1080x1350)\nconst row = $input.first().json;\nconst slides = JSON.parse(row.slides || '[]');\nconst BRAND = '#9B5CF6';\nconst BRAND2 = '#EC4899';\nconst out = [];\nfor (let i = 0; i < slides.length; i++) {\n  const s = slides[i];\n  const badge = (i === 0) ? 'ابدأ هنا' : (i === slides.length - 1 ? 'تابعنا' : (i + 1) + ' / ' + slides.length);\n  const html = `<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"UTF-8\"><style>\n@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');\n*{margin:0;padding:0;box-sizing:border-box;font-family:'Cairo',sans-serif;}\nbody{width:1080px;height:1350px;background:linear-gradient(135deg,${BRAND},${BRAND2});display:flex;align-items:center;justify-content:center;padding:90px;}\n.card{width:100%;height:100%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25);border-radius:48px;padding:80px 70px;display:flex;flex-direction:column;justify-content:center;color:#fff;position:relative;}\n.badge{position:absolute;top:60px;right:70px;background:rgba(255,255,255,.2);padding:14px 34px;border-radius:40px;font-size:34px;font-weight:700;}\n.title{font-size:${i===0?110:88}px;font-weight:900;line-height:1.25;margin-bottom:40px;}\n.body{font-size:52px;font-weight:400;line-height:1.6;opacity:.95;}\n.dot{position:absolute;bottom:60px;left:70px;font-size:30px;opacity:.7;}\n</style></head><body><div class=\"card\"><span class=\"badge\">${badge}</span><div class=\"title\">${(s.title||'').replace(/</g,'&lt;')}</div><div class=\"body\">${(s.body||'').replace(/</g,'&lt;')}</div><span class=\"dot\">◆ صُنع تلقائياً</span></div></body></html>`;\n  out.push({ json: { chatId: row.chatId, caption: row.caption, index: i, total: slides.length, html } });\n}\nreturn out;"
+      },
+      "id": "build-html",
+      "name": "Build 6 HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hcti.io/v1/image",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ html: $json.html, viewport_width: 1080, viewport_height: 1350, device_scale: 1 }) }}",
+        "options": {}
+      },
+      "id": "render-image",
+      "name": "Render Image (HCTI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-240, 420],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "REPLACE_HCTI_CRED",
+          "name": "HCTI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// تجميع كل روابط الصور\nconst items = $input.all();\nconst urls = items.map(it => it.json.url).filter(Boolean);\nconst first = items[0].json;\nreturn [{ json: { chatId: first.chatId, caption: first.caption, images: urls } }];"
+      },
+      "id": "collect-urls",
+      "name": "Collect Image URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-20, 420]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Drafts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chatId": "={{ $json.chatId }}",
+            "images": "={{ JSON.stringify($json.images) }}",
+            "status": "images"
+          },
+          "matchingColumns": ["chatId"]
+        },
+        "options": {}
+      },
+      "id": "save-images",
+      "name": "Save Images",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [200, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_SHEETS_CRED",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=🖼️ *الصور جاهزة!* ({{ $json.images.length }} سلايد)\n\n{{ $json.images.map((u,i)=> (i+1)+'. '+u).join('\\n') }}\n\n———\nرد بـ *انشر* لنشر الكاروسيل على إنستقرام.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "send-images",
+      "name": "Send Images Preview",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [420, 420],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_TELEGRAM_CRED",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Drafts",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chatId",
+              "lookupValue": "={{ $json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-images",
+      "name": "Get Images",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-680, 640],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_SHEETS_CRED",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// إعداد بيانات النشر على إنستقرام\n// ⚠️ استبدل IG_USER_ID و ACCESS_TOKEN من متغيرات البيئة أو عدّلها هنا\nconst row = $input.first().json;\nconst images = JSON.parse(row.images || '[]');\nconst IG_USER_ID = $env.IG_USER_ID || 'REPLACE_IG_USER_ID';\nconst ACCESS_TOKEN = $env.IG_ACCESS_TOKEN || 'REPLACE_IG_ACCESS_TOKEN';\nreturn images.map((url, i) => ({\n  json: {\n    chatId: row.chatId,\n    caption: row.caption,\n    imageUrl: url,\n    index: i,\n    igUserId: IG_USER_ID,\n    accessToken: ACCESS_TOKEN\n  }\n}));"
+      },
+      "id": "prep-publish",
+      "name": "Prep Publish",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.igUserId }}/media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ image_url: $json.imageUrl, is_carousel_item: true, access_token: $json.accessToken }) }}",
+        "options": {}
+      },
+      "id": "ig-item",
+      "name": "IG Create Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-240, 640]
+    },
+    {
+      "parameters": {
+        "jsCode": "// تجميع معرّفات العناصر ثم إنشاء حاوية الكاروسيل\nconst items = $input.all();\nconst creationIds = items.map(it => it.json.id).filter(Boolean);\nconst src = $('Prep Publish').first().json;\nreturn [{ json: {\n  chatId: src.chatId,\n  caption: src.caption,\n  igUserId: src.igUserId,\n  accessToken: src.accessToken,\n  children: creationIds.join(',')\n} }];"
+      },
+      "id": "collect-items",
+      "name": "Collect Item IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-20, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.igUserId }}/media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ media_type: 'CAROUSEL', children: $json.children, caption: $json.caption, access_token: $json.accessToken }) }}",
+        "options": {}
+      },
+      "id": "ig-carousel",
+      "name": "IG Create Carousel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [200, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/v21.0/{{ $('Collect Item IDs').first().json.igUserId }}/media_publish",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id, access_token: $('Collect Item IDs').first().json.accessToken }) }}",
+        "options": {}
+      },
+      "id": "ig-publish",
+      "name": "IG Publish",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 640]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Collect Item IDs').first().json.chatId }}",
+        "text": "=🎉 *تم النشر بنجاح!*\n\nالكاروسيل الآن منشور على إنستقرام 🚀\n\nأرسل موضوع جديد لتبدأ من جديد.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "send-success",
+      "name": "Send Success",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [640, 640],
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_TELEGRAM_CRED",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Router", "type": "main", "index": 0 }]]
+    },
+    "Router": {
+      "main": [
+        [{ "node": "Get Draft", "type": "main", "index": 0 }],
+        [{ "node": "Get Images", "type": "main", "index": 0 }],
+        [{ "node": "Generate Slides (Claude)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Slides (Claude)": {
+      "main": [[{ "node": "Parse Slides", "type": "main", "index": 0 }]]
+    },
+    "Parse Slides": {
+      "main": [[{ "node": "Save Draft", "type": "main", "index": 0 }]]
+    },
+    "Save Draft": {
+      "main": [[{ "node": "Send Draft Text", "type": "main", "index": 0 }]]
+    },
+    "Get Draft": {
+      "main": [[{ "node": "Build 6 HTML", "type": "main", "index": 0 }]]
+    },
+    "Build 6 HTML": {
+      "main": [[{ "node": "Render Image (HCTI)", "type": "main", "index": 0 }]]
+    },
+    "Render Image (HCTI)": {
+      "main": [[{ "node": "Collect Image URLs", "type": "main", "index": 0 }]]
+    },
+    "Collect Image URLs": {
+      "main": [[{ "node": "Save Images", "type": "main", "index": 0 }]]
+    },
+    "Save Images": {
+      "main": [[{ "node": "Send Images Preview", "type": "main", "index": 0 }]]
+    },
+    "Get Images": {
+      "main": [[{ "node": "Prep Publish", "type": "main", "index": 0 }]]
+    },
+    "Prep Publish": {
+      "main": [[{ "node": "IG Create Item", "type": "main", "index": 0 }]]
+    },
+    "IG Create Item": {
+      "main": [[{ "node": "Collect Item IDs", "type": "main", "index": 0 }]]
+    },
+    "Collect Item IDs": {
+      "main": [[{ "node": "IG Create Carousel", "type": "main", "index": 0 }]]
+    },
+    "IG Create Carousel": {
+      "main": [[{ "node": "IG Publish", "type": "main", "index": 0 }]]
+    },
+    "IG Publish": {
+      "main": [[{ "node": "Send Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateId": "instagram-carousel-creator",
+    "description": "يحوّل موضوع نصي إلى كاروسيل إنستقرام عبر تيليقرام: توليد نص بـ Claude، صور بـ HCTI، نشر بـ Instagram Graph API."
+  }
+}
