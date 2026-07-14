@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const msg = ($input.first().json.message?.text || '').trim().toLowerCase();\nconst chatId = $input.first().json.message?.chat?.id || '';\nlet type = 'other';\nlet originalText = $input.first().json.message?.text || '';\n\nif (msg === 'approve' || msg === 'موافق') type = 'approve';\nelse if (msg === 'export' || msg === 'صدر' || msg === 'تصدير') type = 'export';\nelse if (msg === 'post' || msg === 'انشر' || msg === 'نشر') type = 'post';\nelse if (msg === 'أخبار' || msg === 'اخبار' || msg === 'news') type = 'news';\nelse if (/^\\d+$/.test(msg) && parseInt(msg) >= 1 && parseInt(msg) <= 10) {\n  const pickNum = parseInt(msg);\n  const staticData = $getWorkflowStaticData('global');\n  const cached = staticData.newsCache;\n  const cacheAge = Date.now() - (staticData.newsCacheAt || 0);\n  if (cached && cacheAge < 3600000 && pickNum <= cached.length) {\n    const chosen = cached[pickNum - 1];\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({ method: 'GET', url: chosen.link, headers: { 'Accept': 'text/html' } });\n      let body = page;\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '').replace(/<style[^>]*>.*?<\\/style>/gs, '').replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch(e) { fullContent = chosen.desc; }\n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n    return [{ json: { type, originalText, chatId } }];\n  }\n  // Fallback: re-fetch if no cache\n  const RSS_FEEDS = [\n  '__YOUR_RSS_FEED_1__',\n  '__YOUR_RSS_FEED_2__',\n  '__YOUR_RSS_FEED_3__',\n  '__YOUR_RSS_FEED_4__',\n  '__YOUR_RSS_FEED_5__',\n  '__YOUR_RSS_FEED_6__',\n  '__YOUR_RSS_FEED_7__',\n  '__YOUR_RSS_FEED_8__',\n  '__YOUR_RSS_FEED_9__',\n  '__YOUR_RSS_FEED_10__'\n];\n  const allArticles = [];\n  for (const feedUrl of RSS_FEEDS) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'GET', url: feedUrl,\n        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n      });\n      const xml = typeof res === 'string' ? res : JSON.stringify(res);\n      const items = xml.split('<item>').slice(1, 8);\n      for (const item of items) {\n        const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n        const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n        const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n        const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n        const contentMatch = item.match(/<content:encoded><!\\[CDATA\\[(.+?)\\]\\]>/s);\n        const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n        const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n        let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n        desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n        const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n        const source = feedUrl.includes('socialmediaexaminer') ? 'SME' : feedUrl.includes('anthropic') ? 'Anthropic' : feedUrl.includes('openai') ? 'OpenAI' : feedUrl.includes('venturebeat') ? 'VB' : feedUrl.includes('theverge') ? 'Verge' : feedUrl.includes('later') ? 'Later' : feedUrl.includes('techcrunch') ? 'TC' : feedUrl.includes('buffer') ? 'Buffer' : 'WERSM';\n        const aiSources = ['Anthropic','OpenAI','VB','Verge','TC-AI']; const isAI = aiSources.includes(source); const isInstagram = isAI || source !== 'Buffer' || (title + ' ' + desc).toLowerCase().includes('instagram') || (title + ' ' + desc).toLowerCase().includes('reels') || (title + ' ' + desc).toLowerCase().includes('meta');\n        if (title && link && isInstagram) allArticles.push({ title, link, desc, pubDate, source });\n      }\n    } catch (e) {}\n  }\n  allArticles.sort((a, b) => b.pubDate - a.pubDate);\n  const top5 = allArticles.slice(0, 10);\n  if (pickNum <= top5.length) {\n    const chosen = top5[pickNum - 1];\n    \n    // Fetch full article content\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({\n        method: 'GET', url: chosen.link,\n        headers: { 'Accept': 'text/html' }\n      });\n      // Extract text from article body\n      let body = page;\n      // Try to find article/post content area\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || \n                           body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      // Remove scripts, styles, tags\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '');\n      body = body.replace(/<style[^>]*>.*?<\\/style>/gs, '');\n      body = body.replace(/<[^>]*>/g, ' ');\n      body = body.replace(/&[^;]+;/g, ' ');\n      body = body.replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch (e) {\n      fullContent = chosen.desc;\n    }\n    \n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n  }\n}\nelse if (/^s\\d+:/i.test(msg) || /^caption:/i.test(msg) || /^hashtags:/i.test(msg)) type = 'edit';\nelse if (msg.length > 2) type = 'topic';\n\nreturn [{ json: { type, originalText, chatId } }];"
+        "jsCode": "const msg = ($input.first().json.message?.text || '').trim().toLowerCase();\nconst chatId = $input.first().json.message?.chat?.id || '';\nlet type = 'other';\nlet originalText = $input.first().json.message?.text || '';\n\nif (msg === 'approve' || msg === 'موافق') type = 'approve';\nelse if (msg === 'export' || msg === 'صدر' || msg === 'تصدير') type = 'export';\nelse if (msg === 'post' || msg === 'انشر' || msg === 'نشر') type = 'post';\nelse if (msg === 'أخبار' || msg === 'اخبار' || msg === 'news') type = 'news';\nelse if (/^\\d+$/.test(msg) && parseInt(msg) >= 1 && parseInt(msg) <= 10) {\n  const pickNum = parseInt(msg);\n  const staticData = $getWorkflowStaticData('global');\n  const cached = staticData.newsCache;\n  const cacheAge = Date.now() - (staticData.newsCacheAt || 0);\n  if (cached && cacheAge < 3600000 && pickNum <= cached.length) {\n    const chosen = cached[pickNum - 1];\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({ method: 'GET', url: chosen.link, headers: { 'Accept': 'text/html' } });\n      let body = page;\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '').replace(/<style[^>]*>.*?<\\/style>/gs, '').replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch(e) { fullContent = chosen.desc; }\n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n    return [{ json: { type, originalText, chatId } }];\n  }\n  // Fallback: re-fetch if no cache\n  const RSS_FEEDS = [\n  '__YOUR_RSS_FEED_1__',\n  '__YOUR_RSS_FEED_2__',\n  '__YOUR_RSS_FEED_3__',\n  '__YOUR_RSS_FEED_4__',\n  '__YOUR_RSS_FEED_5__',\n  '__YOUR_RSS_FEED_6__',\n  '__YOUR_RSS_FEED_7__',\n  '__YOUR_RSS_FEED_8__',\n  '__YOUR_RSS_FEED_9__',\n  '__YOUR_RSS_FEED_10__'\n];\n  const allArticles = [];\n  for (const feedUrl of RSS_FEEDS) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'GET', url: feedUrl,\n        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n      });\n      const xml = typeof res === 'string' ? res : JSON.stringify(res);\n      const items = xml.split('<item>').slice(1, 8);\n      for (const item of items) {\n        const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n        const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n        const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n        const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n        const contentMatch = item.match(/<content:encoded><!\\[CDATA\\[(.+?)\\]\\]>/s);\n        const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n        const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n        let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n        desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n        const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n        const source = feedUrl.includes('socialmediaexaminer') ? 'SME' : feedUrl.includes('anthropic') ? 'Anthropic' : feedUrl.includes('openai') ? 'OpenAI' : feedUrl.includes('venturebeat') ? 'VB' : feedUrl.includes('theverge') ? 'Verge' : feedUrl.includes('later') ? 'Later' : feedUrl.includes('techcrunch') ? 'TC' : feedUrl.includes('buffer') ? 'Buffer' : 'WERSM';\n        const aiSources = ['Anthropic','OpenAI','VB','Verge','TC-AI']; const isAI = aiSources.includes(source); const isInstagram = isAI || source !== 'Buffer' || (title + ' ' + desc).toLowerCase().includes('instagram') || (title + ' ' + desc).toLowerCase().includes('reels') || (title + ' ' + desc).toLowerCase().includes('meta');\n        if (title && link && isInstagram) allArticles.push({ title, link, desc, pubDate, source });\n      }\n    } catch (e) {}\n  }\n  allArticles.sort((a, b) => b.pubDate - a.pubDate);\n  const top5 = allArticles.slice(0, 10);\n  if (pickNum <= top5.length) {\n    const chosen = top5[pickNum - 1];\n    \n    // Fetch full article content\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({\n        method: 'GET', url: chosen.link,\n        headers: { 'Accept': 'text/html' }\n      });\n      // Extract text from article body\n      let body = page;\n      // Try to find article/post content area\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || \n                           body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      // Remove scripts, styles, tags\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '');\n      body = body.replace(/<style[^>]*>.*?<\\/style>/gs, '');\n      body = body.replace(/<[^>]*>/g, ' ');\n      body = body.replace(/&[^;]+;/g, ' ');\n      body = body.replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch (e) {\n      fullContent = chosen.desc;\n    }\n    \n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n  }\n}\nelse if (/^s\\d+:/i.test(msg) || /^caption:/i.test(msg) || /^hashtags:/i.test(msg)) type = 'edit';\nelse if (msg === 'أفكار' || msg === 'افكار' || msg === 'اقتراحات' || msg === 'مواضيع' || msg === 'ideas' || msg === 'suggest') type = 'ideas';\nelse if (msg.length > 2) type = 'topic';\n\nreturn [{ json: { type, originalText, chatId } }];"
       },
       "id": "03d9619c-9864-4e49-ae47-bd5d7ac74f5d",
       "name": "Parse Message",
@@ -839,7 +839,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
-        "text": "👋 هلا فيك في بوت فطين!\n🧠 فطين — منصة الألعاب الثقافية والاجتماعية\n\n📝 أرسل لي أي موضوع أو معلومة، وأحوّلها لك كاروسيل جاهز للنشر.\n\n━━━━━━━━━━━━\n🎯 الأوامر\n━━━━━━━━━━━━\n📌 اكتب أي موضوع  ←  أجهّز لك المحتوى\n✅ موافق  ←  تصميم السلايدات\n📸 صدّر  ←  تصدير الصور\n📤 انشر  ←  نشر على إنستقرام\n📰 أخبار  ←  آخر الأخبار (رد برقم الخبر)\n\n━━━━━━━━━━━━\n✏️ التعديل\n━━━━━━━━━━━━\ns2: القديم > الجديد\ncaption: كابشن جديد\nhashtags: هاشتاقات جديدة\n\nجاهز نلعب؟ أرسل لي موضوعك 🚀",
+        "text": "👋 هلا فيك في بوت فطين!\n🧠 فطين — منصة الألعاب الثقافية والاجتماعية\n\n📝 أرسل لي أي موضوع أو معلومة، وأحوّلها لك كاروسيل جاهز للنشر.\n\n━━━━━━━━━━━━\n🎯 الأوامر\n━━━━━━━━━━━━\n📌 اكتب أي موضوع  ←  أجهّز لك المحتوى\n✅ موافق  ←  تصميم السلايدات\n📸 صدّر  ←  تصدير الصور\n📤 انشر  ←  نشر على إنستقرام\n📰 أخبار  ←  آخر الأخبار (رد برقم الخبر)\n💡 أفكار  ←  مواضيع ثقافية جاهزة تقترحها لك\n\n━━━━━━━━━━━━\n✏️ التعديل\n━━━━━━━━━━━━\ns2: القديم > الجديد\ncaption: كابشن جديد\nhashtags: هاشتاقات جديدة\n\nجاهز نلعب؟ أرسل لي موضوعك 🚀",
         "additionalFields": {}
       },
       "id": "6bd7e211-8384-448e-a95c-2dba6404c22a",
@@ -1658,6 +1658,76 @@
           "name": "Telegram account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-ideas",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "ideas",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-1111-4a11-8a11-ideas0000001",
+      "name": "Is Ideas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $json.chatId || '';\nconst POOL = [\"أصل أسماء الدول العربية ومعانيها\", \"كلمات عربية فصيحة نستخدمها يوميًا وما ندري\", \"حضارات قامت واندثرت في الجزيرة العربية\", \"أساطير وحكايات شعبية خليجية\", \"أغرب العادات الاجتماعية حول العالم\", \"معلومات عن اللغة العربية تدهشك\", \"شخصيات عربية غيّرت مجرى التاريخ\", \"أصل الأمثال الشعبية ومعانيها الحقيقية\", \"ألعاب شعبية قديمة قبل عصر الجوالات\", \"اختراعات لعلماء مسلمين سبقت عصرها\", \"أسرار الخط العربي وأنواعه\", \"مدن عربية تاريخية وقصصها\", \"معاني أسماء الأشهر الهجرية والميلادية\", \"تقاليد الضيافة في الثقافة العربية\", \"أطعمة شعبية والقصة وراء كل طبق\", \"علم الفلك عند العرب قديمًا\", \"لهجات عربية وكلمات تختلف معانيها بين الدول\", \"القصص وراء أسماء الأبراج\", \"تقاليد الأعراس حول الوطن العربي\", \"كنوز ومواقع أثرية في عُمان\", \"البحّارة والتجارة البحرية في تاريخ عُمان\", \"أدوات ومهن اندثرت مع الزمن\", \"معلومات جغرافية غريبة عن الوطن العربي\", \"أصل الأرقام العربية والهندية\", \"رموز الحيوانات والنباتات في الثقافة العربية\", \"قصص وراء أعلام الدول وألوانها\", \"طرق حساب الوقت عبر الحضارات\", \"شعراء عرب وقصائد خالدة\", \"أساطير القهوة العربية وطقوسها\", \"حصون وقلاع عُمان وقصصها\"];\nfor (let i = POOL.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = POOL[i]; POOL[i] = POOL[j]; POOL[j] = t; }\nconst pick = POOL.slice(0, 8);\nlet text = '💡 أفكار مواضيع ثقافية من فطين:\\n\\n';\npick.forEach((t, i) => { text += (i + 1) + '. ' + t + '\\n'; });\ntext += '\\n✍️ اختر أي فكرة، انسخها وأرسلها لي — أو اكتب موضوعك الخاص!';\nreturn [{ json: { text, chatId } }];"
+      },
+      "id": "a1b2c3d4-2222-4a22-8a22-ideas0000002",
+      "name": "Build Ideas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        1600
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "a1b2c3d4-3333-4a33-8a33-ideas0000003",
+      "name": "Send Ideas",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -592,
+        1600
+      ],
+      "webhookId": "c1d2e3f4-3333-4c33-8c33-ideaswebhook3",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -2076,7 +2146,7 @@
         ],
         [
           {
-            "node": "Send Help",
+            "node": "Is Ideas?",
             "type": "main",
             "index": 0
           }
@@ -2206,6 +2276,35 @@
         [
           {
             "node": "Send Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ideas?": {
+      "main": [
+        [
+          {
+            "node": "Build Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ideas": {
+      "main": [
+        [
+          {
+            "node": "Send Ideas",
             "type": "main",
             "index": 0
           }
