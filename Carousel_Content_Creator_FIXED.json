@@ -1,0 +1,2231 @@
+{
+  "name": "Carousel Content Creator post copy final",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "6885c3b8-a55d-4a7a-a23d-edfd7c1610c0",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2832,
+        656
+      ],
+      "webhookId": "ae8081af-9015-45a4-85bc-8e87020842ec",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = ($input.first().json.message?.text || '').trim().toLowerCase();\nconst chatId = $input.first().json.message?.chat?.id || '';\nlet type = 'other';\nlet originalText = $input.first().json.message?.text || '';\n\nif (msg === 'approve' || msg === 'موافق') type = 'approve';\nelse if (msg === 'export' || msg === 'صدر' || msg === 'تصدير') type = 'export';\nelse if (msg === 'post' || msg === 'انشر' || msg === 'نشر') type = 'post';\nelse if (msg === 'أخبار' || msg === 'اخبار' || msg === 'news') type = 'news';\nelse if (/^\\d+$/.test(msg) && parseInt(msg) >= 1 && parseInt(msg) <= 10) {\n  const pickNum = parseInt(msg);\n  const staticData = $getWorkflowStaticData('global');\n  const cached = staticData.newsCache;\n  const cacheAge = Date.now() - (staticData.newsCacheAt || 0);\n  if (cached && cacheAge < 3600000 && pickNum <= cached.length) {\n    const chosen = cached[pickNum - 1];\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({ method: 'GET', url: chosen.link, headers: { 'Accept': 'text/html' } });\n      let body = page;\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '').replace(/<style[^>]*>.*?<\\/style>/gs, '').replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch(e) { fullContent = chosen.desc; }\n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n    return [{ json: { type, originalText, chatId } }];\n  }\n  // Fallback: re-fetch if no cache\n  const RSS_FEEDS = [\n  '__YOUR_RSS_FEED_1__',\n  '__YOUR_RSS_FEED_2__',\n  '__YOUR_RSS_FEED_3__',\n  '__YOUR_RSS_FEED_4__',\n  '__YOUR_RSS_FEED_5__',\n  '__YOUR_RSS_FEED_6__',\n  '__YOUR_RSS_FEED_7__',\n  '__YOUR_RSS_FEED_8__',\n  '__YOUR_RSS_FEED_9__',\n  '__YOUR_RSS_FEED_10__'\n];\n  const allArticles = [];\n  for (const feedUrl of RSS_FEEDS) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'GET', url: feedUrl,\n        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n      });\n      const xml = typeof res === 'string' ? res : JSON.stringify(res);\n      const items = xml.split('<item>').slice(1, 8);\n      for (const item of items) {\n        const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n        const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n        const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n        const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n        const contentMatch = item.match(/<content:encoded><!\\[CDATA\\[(.+?)\\]\\]>/s);\n        const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n        const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n        let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n        desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n        const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n        const source = feedUrl.includes('socialmediaexaminer') ? 'SME' : feedUrl.includes('anthropic') ? 'Anthropic' : feedUrl.includes('openai') ? 'OpenAI' : feedUrl.includes('venturebeat') ? 'VB' : feedUrl.includes('theverge') ? 'Verge' : feedUrl.includes('later') ? 'Later' : feedUrl.includes('techcrunch') ? 'TC' : feedUrl.includes('buffer') ? 'Buffer' : 'WERSM';\n        const aiSources = ['Anthropic','OpenAI','VB','Verge','TC-AI']; const isAI = aiSources.includes(source); const isInstagram = isAI || source !== 'Buffer' || (title + ' ' + desc).toLowerCase().includes('instagram') || (title + ' ' + desc).toLowerCase().includes('reels') || (title + ' ' + desc).toLowerCase().includes('meta');\n        if (title && link && isInstagram) allArticles.push({ title, link, desc, pubDate, source });\n      }\n    } catch (e) {}\n  }\n  allArticles.sort((a, b) => b.pubDate - a.pubDate);\n  const top5 = allArticles.slice(0, 10);\n  if (pickNum <= top5.length) {\n    const chosen = top5[pickNum - 1];\n    \n    // Fetch full article content\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({\n        method: 'GET', url: chosen.link,\n        headers: { 'Accept': 'text/html' }\n      });\n      // Extract text from article body\n      let body = page;\n      // Try to find article/post content area\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || \n                           body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      // Remove scripts, styles, tags\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '');\n      body = body.replace(/<style[^>]*>.*?<\\/style>/gs, '');\n      body = body.replace(/<[^>]*>/g, ' ');\n      body = body.replace(/&[^;]+;/g, ' ');\n      body = body.replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch (e) {\n      fullContent = chosen.desc;\n    }\n    \n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n  }\n}\nelse if (/^s\\d+:/i.test(msg) || /^caption:/i.test(msg) || /^hashtags:/i.test(msg)) type = 'edit';\nelse if (msg.length > 2) type = 'topic';\n\nreturn [{ json: { type, originalText, chatId } }];"
+      },
+      "id": "03d9619c-9864-4e49-ae47-bd5d7ac74f5d",
+      "name": "Parse Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2672,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-topic",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "topic",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "52f3f733-6f63-426e-8f6b-a302e7393af0",
+      "name": "Is Topic?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2384,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "date": "={{ $now.toISO() }}",
+            "topic": "={{ (function(){ try { const t=(($json.content||[]).find(b=>b&&b.type==='text')||{}).text||''; const s=t.indexOf('{'),e=t.lastIndexOf('}'); return JSON.parse(t.substring(s,e+1)).topic||''; } catch(e){ return ''; } })() }}",
+            "content": "={{ (($json.content||[]).find(b=>b&&b.type==='text')||{}).text || '' }}",
+            "status": "draft",
+            "model": "={{ $json.model }}",
+            "trend_score": "={{ $('Trend & Viral Score').item.json.trend_score }}",
+            "viral_score": "={{ $('Trend & Viral Score').item.json.viral_score }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "topic",
+              "displayName": "topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_urls",
+              "displayName": "image_urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "instagram_post_id",
+              "displayName": "instagram_post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "trend_score",
+              "displayName": "trend_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "viral_score",
+              "displayName": "viral_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "role",
+              "displayName": "role",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stop_reason",
+              "displayName": "stop_reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stop_sequence",
+              "displayName": "stop_sequence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stop_details",
+              "displayName": "stop_details",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "usage",
+              "displayName": "usage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "bc7ceaca-f39b-4d72-ba69-5e3a7ce3b436",
+      "name": "Save to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        64,
+        272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractText(value) {\n  // نص عادي\n  if (typeof value === 'string') {\n    return value;\n  }\n\n  // مصفوفة Claude content blocks\n  if (Array.isArray(value)) {\n    const textBlock = value.find(\n      block =>\n        block &&\n        block.type === 'text' &&\n        typeof block.text === 'string'\n    );\n\n    return textBlock?.text || '';\n  }\n\n  // كائن يحتوي على content\n  if (value && typeof value === 'object') {\n    if (typeof value.text === 'string') {\n      return value.text;\n    }\n\n    if (value.content !== undefined) {\n      return extractText(value.content);\n    }\n  }\n\n  return '';\n}\n\nlet raw = '';\n\n// أولًا: نحاول قراءة النص المحفوظ في Google Sheets\ntry {\n  const sheetData = $('Save to Sheet').first().json;\n  raw = extractText(sheetData.content);\n} catch (error) {\n  raw = '';\n}\n\n// إذا لم يوجد نص صالح في الجدول، نقرأ مباشرة من Claude\nif (!raw) {\n  try {\n    const claudeResponse = $('Claude Content API1').first().json;\n    raw = extractText(claudeResponse.content);\n  } catch (error) {\n    raw = '';\n  }\n}\n\n// Fallback من مدخل العقدة الحالي\nif (!raw) {\n  raw = extractText($input.first().json);\n}\n\nif (!raw || typeof raw !== 'string') {\n  throw new Error(\n    'لم يتم العثور على النص النهائي في رد Claude. تأكد أن الرد يحتوي على block من النوع text.'\n  );\n}\n\n// تنظيف code fences في حال رجع JSON داخل Markdown\nraw = raw\n  .trim()\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nconst start = raw.indexOf('{');\nconst end = raw.lastIndexOf('}');\n\nif (start === -1 || end === -1 || end <= start) {\n  throw new Error(\n    'رد Claude لا يحتوي على JSON صالح.\\n\\nبداية الرد:\\n' +\n    raw.slice(0, 500)\n  );\n}\n\nlet content;\n\ntry {\n  content = JSON.parse(raw.slice(start, end + 1));\n} catch (error) {\n  throw new Error(\n    'تعذر تحليل JSON الصادر من Claude: ' +\n    error.message +\n    '\\n\\nبداية الرد:\\n' +\n    raw.slice(0, 700)\n  );\n}\n\nif (!Array.isArray(content.slides) || content.slides.length === 0) {\n  throw new Error('JSON صالح، لكن لا توجد سلايدات داخل slides.');\n}\n\nconst topic = content.topic || 'موضوع جديد';\nconst slideCount = content.slides.length;\n\nlet preview = '✅ تم إنشاء المحتوى!\\n\\n';\npreview += '📌 الموضوع: ' + topic + '\\n';\npreview += '🔢 عدد السلايدات: ' + slideCount + '\\n\\n';\n\ncontent.slides.forEach((s, i) => {\n  preview += '━━━ سلايد ' + (i + 1) + ' (' + (s.type || 'unknown') + ') ━━━\\n';\n\n  if (s.type === 'cover') {\n    if (s.eyebrow) {\n      preview += s.eyebrow + '\\n';\n    }\n\n    preview += [\n      s.title_line1,\n      s.title_line2_grad,\n      s.title_line3\n    ]\n      .filter(Boolean)\n      .join(' ') + '\\n';\n\n    if (s.pill) {\n      preview += '🏷 ' + s.pill + '\\n';\n    }\n  }\n\n  else if (s.type === 'stat') {\n    preview += '🔢 ' + (s.number || '') + '\\n';\n    preview += '📍 ' + (s.label || '') + '\\n';\n\n    if (s.description) {\n      preview += s.description + '\\n';\n    }\n  }\n\n  else if (s.type === 'how_to') {\n    preview += '📝 ' + (s.title || '') + '\\n';\n\n    (s.steps || []).forEach((step, j) => {\n      preview += (j + 1) + '. ' + step + '\\n';\n    });\n  }\n\n  else if (s.type === 'why_matters') {\n    preview += '💡 ' + (s.title || '') + '\\n';\n\n    (s.points || []).forEach((point, j) => {\n      preview += (j + 1) + '. ' + point + '\\n';\n    });\n  }\n\n  else if (s.type === 'save') {\n    preview += '🔖 احفظ هالمعلومات:\\n';\n\n    (s.points || []).forEach((point, j) => {\n      preview += (j + 1) + '. ' + point + '\\n';\n    });\n  }\n\n  else if (s.type === 'warning') {\n    preview += '⚠️ ' + (s.title || 'انتبه!') + '\\n';\n\n    (s.points || []).forEach((point, j) => {\n      preview += (j + 1) + '. ' + point + '\\n';\n    });\n  }\n\n  else if (s.type === 'one_liner') {\n    preview += '💬 ' + (s.text || '') + '\\n';\n  }\n\n  else if (s.type === 'quote') {\n    preview += '💬 \"' + (s.quote || '') + '\"\\n';\n\n    if (s.author) {\n      preview += '— ' + s.author;\n\n      if (s.role) {\n        preview += ' (' + s.role + ')';\n      }\n\n      preview += '\\n';\n    }\n  }\n\n  else if (s.type === 'comparison') {\n    preview +=\n      (s.col1_header || 'الأول') +\n      ' vs ' +\n      (s.col2_header || 'الثاني') +\n      '\\n';\n\n    (s.rows || []).forEach(row => {\n      if (Array.isArray(row)) {\n        preview +=\n          '• ' +\n          (row[0] || '') +\n          ' | ' +\n          (row[1] || '') +\n          '\\n';\n      }\n    });\n  }\n\n  else if (s.type === 'action_prompt') {\n    preview += '📣 ' + (s.headline || '') + '\\n';\n    preview += 'الإجراء: ' + (s.action || 'save') + '\\n';\n  }\n\n  else if (s.type === 'cta') {\n    preview += '❓ ' + (s.question || '') + '\\n';\n\n    if (\n      Array.isArray(s.options) &&\n      s.options.length\n    ) {\n      s.options.forEach((option, j) => {\n        preview +=\n          String.fromCharCode(65 + j) +\n          ') ' +\n          option +\n          '\\n';\n      });\n    }\n\n    else if (s.cta_style === 'poll') {\n      preview +=\n        'A) ' + (s.poll_left || 'موافق') + '\\n';\n\n      preview +=\n        'B) ' + (s.poll_right || 'مو موافق') + '\\n';\n    }\n  }\n\n  preview += '\\n';\n});\n\nif (content.caption) {\n  preview +=\n    '━━━ الكابشن ━━━\\n' +\n    content.caption +\n    '\\n\\n';\n}\n\nif (content.hashtags) {\n  preview +=\n    '━━━ الهاشتاقات ━━━\\n' +\n    content.hashtags +\n    '\\n\\n';\n}\n\npreview +=\n  '💬 أرسل approve للتصميم\\n\\n' +\n  '✏️ أو عدّل:\\n' +\n  's2: قديم > جديد\\n' +\n  'caption: نص جديد';\n\nreturn [\n  {\n    json: {\n      preview,\n      chatId: $('Telegram Trigger').first().json.message.chat.id,\n      contentJson: JSON.stringify(content),\n      topic,\n      slideCount,\n      caption: content.caption || '',\n      hashtags: content.hashtags || ''\n    }\n  }\n];"
+      },
+      "id": "b6525ef9-e265-494a-8bc5-7378f68034a4",
+      "name": "Format Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $json.preview }}",
+        "additionalFields": {}
+      },
+      "id": "babce60c-0081-4082-b917-35cf3f55dd87",
+      "name": "Send Preview",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        448
+      ],
+      "webhookId": "3d5d6b21-5acc-4116-b725-7e846a674426",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-approve",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b85ec43f-9a2a-476e-9aeb-bdd773a12d2d",
+      "name": "Is Approve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1936,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "🎨 جاري التصميم... انتظر شوي",
+        "additionalFields": {}
+      },
+      "id": "5f2fd7fd-1306-4a6f-b452-e55ea7e5349b",
+      "name": "Send Designing",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1712,
+        336
+      ],
+      "webhookId": "8f3b1be0-08ab-4a65-b1cb-8a7f80f643d6",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "01110b01-2448-4a7b-8a1d-d8b94f5775d2",
+      "name": "Read Draft Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1488,
+        336
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet lastDraft = null;\nlet lastIndex = -1;\nfor (let i = items.length - 1; i >= 0; i--) {\n  if (items[i].json.status === 'draft') {\n    lastDraft = items[i].json;\n    lastIndex = i + 2; // +2 because sheets are 1-indexed and header row\n    break;\n  }\n}\nif (!lastDraft) throw new Error('No draft rows found');\nreturn [{ json: { ...lastDraft, rowIndex: lastIndex, contentJson: lastDraft['content'] } }];"
+      },
+      "id": "ca9c4395-01a4-478c-b488-84952701949b",
+      "name": "Get Last Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "=Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "id": "={{ $json.id }}",
+            "status": "approved"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "afc5a426-d741-4021-b305-531e83980239",
+      "name": "Update to Approved",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1040,
+        336
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nlet raw = $('Get Last Draft').item.json.contentJson;\nlet start = raw.indexOf('{');\nlet end = raw.lastIndexOf('}');\nconst data = JSON.parse(raw.substring(start, end + 1));\nconst slides = data.slides;\nconst N = slides.length;\nconst MAJED_PHOTO = \"__YOUR_PROFILE_PHOTO_URL__\";\n\nconst CSS = `@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');\n* { margin: 0; padding: 0; box-sizing: border-box; }\nbody { background: #111; font-family: Cairo, sans-serif; direction: rtl; display: flex; flex-direction: column; align-items: center; padding: 30px; }\n.slides-container { display: flex; gap: 20px; direction: ltr; flex-wrap: wrap; justify-content: center; }\n.slide { width: 1080px; height: 1350px; background: #000; border-radius: 40px; border: 2px solid rgba(255,255,255,0.07); position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; direction: rtl; }\n.progress { position: absolute; top: 0; left: 0; right: 0; display: flex; gap: 4px; padding: 0 4px; z-index: 10; }\n.progress .seg { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); }\n.progress .seg.done { background: linear-gradient(90deg, #9B5CF6, #EC4899); }\n.counter { position: absolute; top: 40px; right: 50px; font-size: 32px; color: rgba(255,255,255,0.22); font-weight: 700; direction: ltr; z-index: 10; }\n.dots { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; z-index: 10; }\n.dots .dot { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,0.15); }\n.dots .dot.active { width: 44px; height: 16px; border-radius: 8px; background: #fff; }\n.grad { background: linear-gradient(135deg, #9B5CF6, #EC4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }\n.pill { background: transparent; border: 2px solid rgba(155,92,246,0.3); border-radius: 50px; padding: 18px 50px; font-size: 40px; color: rgba(155,92,246,0.9); font-weight: 700; display: inline-block; }\n.bullet { width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #9B5CF6, #EC4899); display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; color: #fff; flex-shrink: 0; }\n.arrow-btn { width: 130px; height: 130px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }\n.photo-circle { width: 220px; height: 220px; border-radius: 50%; border: 5px solid transparent; background: linear-gradient(#000,#000) padding-box, linear-gradient(135deg,#9B5CF6,#EC4899) border-box; overflow: hidden; display: flex; align-items: center; justify-content: center; }\n.photo-circle img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }\n.content { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 70px 40px; gap: 20px; text-align: center; }\n.eyebrow { font-size: 38px; color: #B0B0B0; font-weight: 700; }\n.title { font-size: 90px; font-weight: 900; color: #fff; line-height: 1.5; padding: 0 60px; }\n.stretched { font-size: 110px; letter-spacing: 18px; display: inline-block; line-height: 1.5; padding: 10px 0; }\n.big-number { font-size: 280px; font-weight: 900; line-height: 1; }\n.label { font-size: 62px; font-weight: 900; color: #fff; }\n.desc { font-size: 42px; color: #fff; line-height: 1.8; padding: 0 40px; font-weight: 700; }\n.emoji-big { font-size: 110px; margin-top: 10px; }\n.section-title { font-size: 85px; font-weight: 900; margin-bottom: 10px; }\n.step { display: flex; gap: 30px; align-items: center; text-align: right; }\n.step-text { font-size: 48px; color: #fff; font-weight: 700; line-height: 1.5; flex: 1; text-align: right; }\n.one-liner-text { font-size: 82px; font-weight: 900; color: #fff; line-height: 1.7; }\n.question { font-size: 56px; font-weight: 900; color: #fff; line-height: 1.6; }\n.options { display: flex; flex-direction: column; gap: 24px; width: 100%; padding: 0 30px; }\n.option { padding: 34px 44px; border-radius: 34px; font-size: 46px; font-weight: 700; color: #fff; text-align: center; }\n.option.a { background: rgba(155,92,246,0.12); border: 2px solid rgba(155,92,246,0.3); }\n.option.b { background: rgba(236,72,153,0.1); border: 2px solid rgba(236,72,153,0.25); }\n.option.c { background: rgba(255,255,255,0.04); border: 2px solid rgba(255,255,255,0.12); }\n.profile { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-top: 10px; }\n.profile-name { font-size: 34px; color: rgba(255,255,255,0.4); font-weight: 700; }\n.save-box { background: rgba(155,92,246,0.07); border: 1px solid rgba(155,92,246,0.2); border-radius: 13px; padding: 30px; display: flex; flex-direction: column; gap: 20px; width: 100%; }\n.save-row { display: flex; gap: 20px; align-items: center; text-align: right; }\n.save-label { font-size: 38px; color: #B0B0B0; font-weight: 700; margin-bottom: 10px; }\n.quote-mark { font-size: 120px; background: linear-gradient(135deg, #9B5CF6, #EC4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }\n.quote-text { font-size: 48px; font-weight: 700; color: #fff; line-height: 1.7; }\n.quote-author { font-size: 34px; color: #B0B0B0; font-weight: 700; }\n.warning-icon { font-size: 100px; text-align: center; }\n.warning-title { font-size: 70px; font-weight: 900; }\n.warning-points { display: flex; flex-direction: column; gap: 20px; }\n.warning-point { font-size: 44px; color: #fff; font-weight: 700; line-height: 1.6; text-align: right; }\n.comparison-table { width: 90%; }\n.comp-header { display: flex; gap: 10px; margin-bottom: 20px; }\n.comp-col-header { flex: 1; text-align: center; font-size: 42px; font-weight: 900; padding: 20px; border-radius: 16px; }\n.comp-row { display: flex; gap: 10px; margin-bottom: 10px; }\n.comp-cell { flex: 1; text-align: center; font-size: 38px; font-weight: 700; color: #fff; padding: 20px; border-radius: 12px; background: rgba(255,255,255,0.04); }\n.caption-area { max-width: 1100px; margin-top: 30px; padding: 20px 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; direction: rtl; }\n.caption-area h3 { font-size: 14px; color: rgba(255,255,255,0.5); font-weight: 700; margin-bottom: 10px; }\n.caption-area p { font-size: 13px; color: rgba(255,255,255,0.65); line-height: 1.8; white-space: pre-line; }\n.caption-area .hashtags { margin-top: 12px; font-size: 12px; color: rgba(155,92,246,0.7); line-height: 1.8; }`;\n\nfunction progressBar(idx, total) {\n  let segs = '';\n  for (let i = 0; i < total; i++) {\n    segs += '<div class=\"seg' + (i <= idx ? ' done' : '') + '\"></div>';\n  }\n  return '<div class=\"progress\">' + segs + '</div>';\n}\n\nfunction counter(idx, total) {\n  return '<div class=\"counter\">' + (idx+1) + ' / ' + total + '</div>';\n}\n\nfunction dots(idx, total) {\n  let d = '';\n  for (let i = 0; i < total; i++) {\n    d += '<div class=\"dot' + (i === idx ? ' active' : '') + '\"></div>';\n  }\n  return '<div class=\"dots\">' + d + '</div>';\n}\n\nfunction ltr(text) {\n  return '<span style=\"unicode-bidi:embed;direction:ltr\">' + text + '</span>';\n}\n\nfunction renderSlide(slide, idx) {\n  const common = progressBar(idx, N) + counter(idx, N) + dots(idx, N);\n  let inner = '';\n\n  switch(slide.type) {\n    case 'cover':\n      const wrapLine = (text, isGrad) => {\n        if (!text) return '';\n        const wordCount = text.trim().split(/\\s+/).length;\n        const doStretch = isGrad && wordCount === 1;\n        const stretchArabic = (w) => {\n          const chars = Array.from(w);\n          const out = [];\n          for (let i = 0; i < chars.length; i++) {\n            out.push(chars[i]);\n            const c = chars[i];\n            const next = chars[i+1];\n            if (next && /[\\u0600-\\u06FF]/.test(c) && /[\\u0600-\\u06FF]/.test(next) && !/[\\u0621\\u0622\\u0623\\u0624\\u0625\\u0626\\u0627\\u062F\\u0630\\u0631\\u0632\\u0648\\u0629]/.test(c)) {\n              out.push('\\u0640\\u0640\\u0640');\n            }\n          }\n          return out.join('');\n        };\n        const displayText = doStretch ? stretchArabic(text) : text;\n        const didStretch = doStretch && displayText !== text;\n        if (isGrad) return '<span class=\"grad' + (didStretch ? ' stretched' : '') + '\">' + displayText + '</span>';\n        return didStretch ? '<span class=\"stretched\">' + displayText + '</span>' : displayText;\n      };\n      const titleLine2 = slide.title_line2_grad ? wrapLine(slide.title_line2_grad, true) : '';\n      inner = '<div class=\"content\">' +\n        '<div class=\"eyebrow\">' + (slide.eyebrow||'') + '</div>' +\n        '<div class=\"title\">' +\n          wrapLine(slide.title_line1, false) + (slide.title_line1 ? '<br>' : '') +\n          titleLine2 + (slide.title_line2_grad && slide.title_line3 ? '<br>' : '') +\n          wrapLine(slide.title_line3, false) +\n        '</div>' +\n        '<div class=\"pill\">' + (slide.pill||'') + '</div>' +\n        '<div class=\"arrow-btn\"><svg width=\"55\" height=\"55\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#9B5CF6\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12H19\"/><path d=\"M12 5l7 7-7 7\"/></svg></div>' +\n      '</div>';\n      break;\n\n    case 'stat':\n      inner = '<div class=\"content\">' +\n        '<div class=\"big-number grad\">' + (slide.number||'') + '</div>' +\n        '<div class=\"label\">' + (slide.label||'') + '</div>' +\n        '<div class=\"desc\">' + (slide.description||'') + '</div>' +\n        '<div class=\"emoji-big\">' + (slide.emoji||'') + '</div>' +\n      '</div>';\n      break;\n\n    case 'why_matters':\n      const wmPoints = (slide.points||[]).map((p, i) =>\n        '<div class=\"step\"><div class=\"bullet\">' + ['١','٢','٣','٤','٥','٦'][i] + '</div><div class=\"step-text\">' + p + '</div></div>'\n      ).join('');\n      inner = '<div class=\"content\" style=\"align-items:flex-start;\">' +\n        '<div class=\"section-title grad\">' + (slide.title||'ليش يهمك؟') + '</div>' +\n        wmPoints +\n      '</div>';\n      break;\n\n    case 'how_to':\n      const htSteps = (slide.steps||[]).map((s, i) =>\n        '<div class=\"step\"><div class=\"bullet\">' + ['١','٢','٣','٤','٥','٦'][i] + '</div><div class=\"step-text\">' + s + '</div></div>'\n      ).join('');\n      inner = '<div class=\"content\" style=\"align-items:flex-start;\">' +\n        '<div class=\"section-title grad\">' + (slide.title||'كيف تستفيد؟') + '</div>' +\n        htSteps +\n      '</div>';\n      break;\n\n    case 'save':\n      const saveRows = (slide.points||[]).map((p, i) =>\n        '<div class=\"save-row\"><div class=\"bullet\">' + (['١','٢','٣','٤','٥','٦','٧','٨'][i] || (i+1)) + '</div><div class=\"step-text\">' + p + '</div></div>'\n      ).join('');\n      inner = '<div class=\"content\" style=\"align-items:flex-start;\">' +\n        '<div class=\"save-label\">🔖 احفظ هذا السلايد</div>' +\n        '<div class=\"save-box\">' + saveRows + '</div>' +\n      '</div>';\n      break;\n\n    case 'one_liner':\n      const olText = slide.grad_word ?\n        (slide.text||'').replace(slide.grad_word, '<span class=\"grad\">' + slide.grad_word + '</span>') :\n        (slide.text||'');\n      inner = '<div class=\"content\"><div class=\"one-liner-text\">' + olText + '</div></div>';\n      break;\n\n    case 'comparison':\n      const rows = (slide.rows||[]).map(r =>\n        '<div class=\"comp-row\"><div class=\"comp-cell\">' + r[0] + '</div><div class=\"comp-cell\">' + r[1] + '</div></div>'\n      ).join('');\n      inner = '<div class=\"content\">' +\n        '<div class=\"comparison-table\">' +\n          '<div class=\"comp-header\"><div class=\"comp-col-header grad\">' + (slide.col1_header||'') + '</div><div class=\"comp-col-header grad\">' + (slide.col2_header||'') + '</div></div>' +\n          rows +\n        '</div></div>';\n      break;\n\n    case 'quote':\n      inner = '<div class=\"content\">' +\n        '<div class=\"quote-mark\">\"</div>' +\n        '<div class=\"quote-text\">' + (slide.quote||'') + '</div>' +\n        '<div class=\"quote-author\">' + (slide.author||'') + ' — ' + (slide.role||'') + '</div>' +\n      '</div>';\n      break;\n\n    case 'warning':\n      const wPoints = (slide.points||[]).map(p =>\n        '<div class=\"warning-point\">⚠️ ' + p + '</div>'\n      ).join('');\n      inner = '<div class=\"content\" style=\"align-items:flex-start;\">' +\n        '<div class=\"warning-icon\">⚠️</div>' +\n        '<div class=\"warning-title grad\">' + (slide.title||'انتبه!') + '</div>' +\n        '<div class=\"warning-points\">' + wPoints + '</div>' +\n      '</div>';\n      break;\n\n    case 'action_prompt': {\n      const ACTION_IMGS = {\n        'share': '__YOUR_SHARE_IMAGE_URL__',\n        'save':  '__YOUR_SAVE_IMAGE_URL__',\n        'like':  '__YOUR_LIKE_IMAGE_URL__'\n      };\n      const imgUrl = ACTION_IMGS[slide.action] || ACTION_IMGS['save'];\n      const DEFAULT_HEADLINES = {\n        'save':  'احفظ هالمنشور يمكن ما تحصله',\n        'share': 'حق منو راح ترسل هذا البوست؟',\n        'like':  'اضغط مرتين عالشاشة'\n      };\n      const headline = slide.headline || DEFAULT_HEADLINES[slide.action] || DEFAULT_HEADLINES['save'];\n      inner = '<div style=\"position:absolute;top:140px;left:0;right:0;z-index:2;padding:0 60px;text-align:center\">' +\n        '<div style=\"font-size:62px;font-weight:900;color:#fff;line-height:1.4;max-width:900px;margin:0 auto;text-shadow:0 4px 20px rgba(0,0,0,0.8)\">' + headline + '</div>' +\n      '</div>' +\n      '<img src=\"' + imgUrl + '\" style=\"position:absolute;bottom:0px;left:50%;transform:translateX(-50%);height:900px;width:auto;max-width:100%;object-fit:contain;z-index:1\"/>';\n      break;\n    }\n    case 'cta':\n      let ctaContent = '';\n      const q = slide.grad_phrase ?\n        (slide.question||'').replace(slide.grad_phrase, '<span class=\"grad\">' + slide.grad_phrase + '</span>') :\n        (slide.question||'');\n\n      if (slide.cta_style === 'options' && slide.options) {\n        const classes = ['a','b','c'];\n        const optHtml = slide.options.map((o, i) =>\n          '<div class=\"option ' + (classes[i]||'c') + '\">' + o + '</div>'\n        ).join('');\n        ctaContent = '<div class=\"options\">' + optHtml + '</div>';\n      } else if (slide.cta_style === 'poll') {\n        ctaContent = '<div class=\"options\"><div class=\"option a\">' + (slide.poll_left||'موافق') + ' ←</div><div class=\"option b\">→ ' + (slide.poll_right||'مو موافق') + '</div></div>';\n      } else if (slide.cta_style === 'open') {\n        ctaContent = '<div class=\"desc\" style=\"font-size:52px;line-height:1.7;\">💬 شاركنا جوابك بالكومنت</div>';\n      } else if (slide.cta_style === 'share') {\n        ctaContent = '<div class=\"options\"><div class=\"option a\">📤 شارك مع صديق</div><div class=\"option b\">🔖 احفظ للرجوع له</div></div>';\n      } else if (slide.cta_style === 'follow') {\n        ctaContent = '<div class=\"options\"><div class=\"option a\">✅ تابعني عشان ما تفوتك</div></div>';\n      } else if (slide.cta_style === 'challenge') {\n        ctaContent = '<div class=\"desc\" style=\"font-size:52px;line-height:1.7;\">🎯 جرّبه وقولنا النتيجة بالكومنت</div>';\n      } else {\n        ctaContent = '<div class=\"desc\" style=\"font-size:52px;line-height:1.7;\">💬 شاركنا رأيك بالكومنت</div>';\n      }\n\n      inner = '<div class=\"content\">' +\n        '<div class=\"question\">' + q + '</div>' +\n        ctaContent +\n        '<div class=\"profile\">' +\n          '<div class=\"photo-circle\"><img src=\"' + MAJED_PHOTO + '\" alt=\"Majed\"></div>' +\n          '<div class=\"profile-name\" style=\"direction:ltr\">@majedphotos ✓</div>' +\n        '</div>' +\n      '</div>';\n      break;\n\n    default:\n      inner = '<div class=\"content\"><div class=\"desc\">Unknown slide type: ' + slide.type + '</div></div>';\n  }\n\n  return '<div class=\"slide\">' + common + inner + '</div>';\n}\n\nlet slidesHtml = slides.map((s, i) => renderSlide(s, i)).join('\\n');\n\nconst captionHtml = data.caption ?\n  '<div class=\"caption-area\"><h3>📝 الكابشن</h3><p>' + data.caption + '</p><div class=\"hashtags\">' + (data.hashtags||'') + '</div></div>' : '';\n\nconst fullHtml = '<!DOCTYPE html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"UTF-8\"><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap\" rel=\"stylesheet\"><title>Carousel Preview — ' + data.topic + '</title><style>' + CSS + '</style></head><body><div class=\"slides-container\">' + slidesHtml + '</div>' + captionHtml + '</body></html>';\n\nconst buffer = Buffer.from(fullHtml, 'utf-8');\nreturn [{\n  json: {},\n  binary: {\n    data: {\n      data: buffer.toString('base64'),\n      mimeType: 'text/html',\n      fileName: 'carousel_preview.html',\n      fileExtension: 'html'\n    }\n  }\n}];\n"
+      },
+      "id": "3ae58b75-ff42-42c8-94e0-cb978b15227c",
+      "name": "Generate All Slides HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendDocument",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "📎 ملف المعاينة — افتحه بالمتصفح\n\n✅ إذا عجبك التصميم أرسل export أو صدر لتصدير الصور"
+        }
+      },
+      "id": "558b3a07-4c19-4a9a-ab2f-eadfcfb6b119",
+      "name": "Send HTML File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -592,
+        336
+      ],
+      "webhookId": "d37e966a-21b8-4d78-ac41-f2dd1d6e2085",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-export",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "export",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a612c3ae-e51f-4d51-91b0-bca6f5f6dfc6",
+      "name": "Is Export?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1488,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "📸 جاري تصدير الصور... انتظر شوي",
+        "additionalFields": {}
+      },
+      "id": "7f2e3830-4377-4df6-ad8f-1d33e9362b41",
+      "name": "Send Exporting",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1264,
+        528
+      ],
+      "webhookId": "1697a874-6fce-4eb1-a55a-4f2ffffb9ee7",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "8212368d-df30-4a06-91bc-207bf0045e96",
+      "name": "Read Approved Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1040,
+        528
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet lastApproved = null;\nfor (let i = items.length - 1; i >= 0; i--) {\n  if (items[i].json.status === 'approved') {\n    lastApproved = items[i].json;\n    break;\n  }\n}\nif (!lastApproved) throw new Error('No approved rows found');\nreturn [{ json: { ...lastApproved, contentJson: lastApproved['content'] } }];"
+      },
+      "id": "10199978-490e-4bf2-82ed-9d6035398a2b",
+      "name": "Get Last Approved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "topic",
+              "displayName": "topic",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "image_urls",
+              "displayName": "image_urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "instagram_post_id",
+              "displayName": "instagram_post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "trend_score",
+              "displayName": "trend_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "viral_score",
+              "displayName": "viral_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9f214ee1-6461-4a0e-b718-9d80ff26bc15",
+      "name": "Update to Exported",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -592,
+        528
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "let raw = $('Get Last Approved').item.json.contentJson;\n\nconst start = raw.indexOf('{');\nconst end = raw.lastIndexOf('}');\n\nif (start === -1 || end === -1) {\n  throw new Error('لم يتم العثور على JSON صالح داخل المحتوى المعتمد');\n}\n\nconst data = JSON.parse(raw.substring(start, end + 1));\nconst slides = Array.isArray(data.slides) ? data.slides : [];\n\nif (!slides.length) {\n  throw new Error('لا توجد سلايدات داخل المحتوى المعتمد');\n}\n\nconst N = slides.length;\n\n/*\n|--------------------------------------------------------------------------\n| هوية فطين\n|--------------------------------------------------------------------------\n*/\n\nconst BRAND = {\n  name: 'فطين',\n  handle: '@playfateen',\n  background: '#0B1F2A',\n  backgroundSoft: '#102B38',\n  cream: '#F7F2E8',\n  white: '#FFFFFF',\n  teal: '#36C2B4',\n  coral: '#FF8364',\n  yellow: '#F5C95B',\n  muted: '#AFC1C7',\n  darkText: '#10242E'\n};\n\nconst episodeNumber =\n  data.episode_number ||\n  data.episode ||\n  data.series_number ||\n  '';\n\nconst arabicNums = ['١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩', '١٠'];\n\n/*\n|--------------------------------------------------------------------------\n| أدوات حماية النصوص\n|--------------------------------------------------------------------------\n*/\n\nfunction escapeHtml(value = '') {\n  return String(value)\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#039;');\n}\n\nfunction cleanText(value = '') {\n  return escapeHtml(String(value).trim());\n}\n\nfunction highlightWord(text = '', word = '') {\n  const safeText = cleanText(text);\n  const safeWord = cleanText(word);\n\n  if (!safeWord || !safeText.includes(safeWord)) {\n    return safeText;\n  }\n\n  return safeText.replace(\n    safeWord,\n    `<span class=\"highlight\">${safeWord}</span>`\n  );\n}\n\nfunction compactTextClass(text = '', base = 'body-text') {\n  const length = String(text).length;\n\n  if (length > 150) return `${base} extra-small`;\n  if (length > 100) return `${base} small`;\n  if (length > 65) return `${base} medium`;\n\n  return base;\n}\n\nfunction pointsClass(points = []) {\n  const totalLength = points.join('').length;\n\n  if (points.length >= 5 || totalLength > 220) return 'point-text small';\n  if (totalLength > 150) return 'point-text medium';\n\n  return 'point-text';\n}\n\n/*\n|--------------------------------------------------------------------------\n| عناصر الهوية المشتركة\n|--------------------------------------------------------------------------\n*/\n\nfunction brandHeader(idx) {\n  const current = idx + 1;\n\n  return `\n    <div class=\"brand-header\">\n      <div class=\"brand-name\">${BRAND.name}</div>\n\n      <div class=\"slide-meta\">\n        ${\n          episodeNumber\n            ? `<span class=\"episode-number\">${cleanText(episodeNumber)}</span>`\n            : ''\n        }\n\n        <span class=\"slide-number\">${current}</span>\n      </div>\n    </div>\n  `;\n}\n\nfunction swipeHint(idx) {\n  if (idx === N - 1) return '';\n\n  return `\n    <div class=\"swipe-hint\">\n      <span>اسحب</span>\n      <svg\n        width=\"30\"\n        height=\"30\"\n        viewBox=\"0 0 24 24\"\n        fill=\"none\"\n        aria-hidden=\"true\"\n      >\n        <path\n          d=\"M15 18L9 12L15 6\"\n          stroke=\"currentColor\"\n          stroke-width=\"2.6\"\n          stroke-linecap=\"round\"\n          stroke-linejoin=\"round\"\n        />\n      </svg>\n    </div>\n  `;\n}\n\nfunction footerProgress(idx) {\n  let bars = '';\n\n  for (let i = 0; i < N; i++) {\n    bars += `\n      <span class=\"progress-segment ${i <= idx ? 'active' : ''}\"></span>\n    `;\n  }\n\n  return `\n    <div class=\"footer-progress\">\n      ${bars}\n    </div>\n  `;\n}\n\nfunction decorativeShapes(variant = 'default') {\n  if (variant === 'cover') {\n    return `\n      <div class=\"shape glow-one\"></div>\n      <div class=\"shape glow-two\"></div>\n      <div class=\"orbit orbit-one\"></div>\n      <div class=\"orbit orbit-two\"></div>\n      <div class=\"spark spark-one\">✦</div>\n      <div class=\"spark spark-two\">✦</div>\n    `;\n  }\n\n  if (variant === 'light') {\n    return `\n      <div class=\"shape light-orb-one\"></div>\n      <div class=\"shape light-orb-two\"></div>\n    `;\n  }\n\n  return `\n    <div class=\"shape soft-orb-one\"></div>\n    <div class=\"shape soft-orb-two\"></div>\n  `;\n}\n\n/*\n|--------------------------------------------------------------------------\n| صورة ChatGPT الاختيارية\n|--------------------------------------------------------------------------\n|\n| لاحقًا عندما تولد صورة من OpenAI، ضع رابطها داخل أحد الحقول:\n| image_url\n| visual_url\n| background_image\n|\n*/\n\nfunction generatedVisual(slide, mode = 'card') {\n  const url =\n    slide.image_url ||\n    slide.visual_url ||\n    slide.background_image ||\n    '';\n\n  if (!url) return '';\n\n  const safeUrl = escapeHtml(url);\n\n  if (mode === 'background') {\n    return `\n      <div\n        class=\"generated-background\"\n        style=\"background-image:url('${safeUrl}')\"\n      ></div>\n      <div class=\"generated-overlay\"></div>\n    `;\n  }\n\n  return `\n    <div class=\"visual-card\">\n      <img\n        src=\"${safeUrl}\"\n        alt=\"\"\n        crossorigin=\"anonymous\"\n      />\n    </div>\n  `;\n}\n\n/*\n|--------------------------------------------------------------------------\n| المكوّنات\n|--------------------------------------------------------------------------\n*/\n\nfunction numberedPoints(points = []) {\n  const pointTextClass = pointsClass(points);\n\n  return points\n    .map((point, index) => {\n      return `\n        <div class=\"point-row\">\n          <div class=\"point-number\">\n            ${arabicNums[index] || index + 1}\n          </div>\n\n          <div class=\"${pointTextClass}\">\n            ${cleanText(point)}\n          </div>\n        </div>\n      `;\n    })\n    .join('');\n}\n\nfunction iconForType(type = '') {\n  const icons = {\n    stat: '↗',\n    why_matters: '!',\n    how_to: '✓',\n    save: '⌁',\n    one_liner: '✦',\n    comparison: '⇄',\n    quote: '“',\n    warning: '!',\n    action_prompt: '✦',\n    cta: '?'\n  };\n\n  return icons[type] || '✦';\n}\n\nfunction typeLabel(type = '') {\n  const labels = {\n    stat: 'رقم يستحق الوقوف عنده',\n    why_matters: 'ليش هذا مهم؟',\n    how_to: 'كيف تستفيد؟',\n    save: 'معلومات تستحق الحفظ',\n    one_liner: 'الخلاصة',\n    comparison: 'خلنا نقارن',\n    quote: 'كلام يستحق الانتباه',\n    warning: 'انتبه',\n    action_prompt: 'قبل تكمل',\n    cta: 'شاركنا'\n  };\n\n  return labels[type] || 'معلومة فطينة';\n}\n\nfunction sectionBadge(type = '') {\n  return `\n    <div class=\"section-badge\">\n      <span class=\"section-icon\">${iconForType(type)}</span>\n      <span>${typeLabel(type)}</span>\n    </div>\n  `;\n}\n\n/*\n|--------------------------------------------------------------------------\n| تصميم كل نوع سلايد\n|--------------------------------------------------------------------------\n*/\n\nfunction renderCover(slide) {\n  const title1 = cleanText(slide.title_line1 || '');\n  const title2 = cleanText(slide.title_line2_grad || '');\n  const title3 = cleanText(slide.title_line3 || '');\n\n  const fullTitleLength =\n    String(slide.title_line1 || '').length +\n    String(slide.title_line2_grad || '').length +\n    String(slide.title_line3 || '').length;\n\n  let titleClass = 'cover-title';\n\n  if (fullTitleLength > 70) titleClass += ' small';\n  else if (fullTitleLength > 48) titleClass += ' medium';\n\n  const isStretched =\n    slide.stretched === true ||\n    slide.cover_style === 'stretched';\n\n  return `\n    ${generatedVisual(slide, 'background')}\n    ${decorativeShapes('cover')}\n\n    <main class=\"cover-content\">\n      ${\n        slide.eyebrow\n          ? `\n            <div class=\"eyebrow\">\n              ${cleanText(slide.eyebrow)}\n            </div>\n          `\n          : ''\n      }\n\n      <div class=\"${titleClass}\">\n        ${title1 ? `<div>${title1}</div>` : ''}\n\n        ${\n          title2\n            ? `\n              <div class=\"cover-highlight ${isStretched ? 'stretched' : ''}\">\n                ${title2}\n              </div>\n            `\n            : ''\n        }\n\n        ${title3 ? `<div>${title3}</div>` : ''}\n      </div>\n\n      ${\n        slide.pill\n          ? `\n            <div class=\"cover-pill\">\n              ${cleanText(slide.pill)}\n            </div>\n          `\n          : ''\n      }\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderStat(slide) {\n  return `\n    ${decorativeShapes()}\n\n    <main class=\"center-content\">\n      ${sectionBadge('stat')}\n\n      <div class=\"stat-number\">\n        ${cleanText(slide.number || '')}\n      </div>\n\n      <div class=\"stat-label\">\n        ${cleanText(slide.label || '')}\n      </div>\n\n      ${\n        slide.description\n          ? `\n            <div class=\"${compactTextClass(slide.description)}\">\n              ${cleanText(slide.description)}\n            </div>\n          `\n          : ''\n      }\n\n      ${\n        slide.emoji\n          ? `\n            <div class=\"stat-emoji\">\n              ${cleanText(slide.emoji)}\n            </div>\n          `\n          : ''\n      }\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderWhyMatters(slide) {\n  const points = Array.isArray(slide.points) ? slide.points : [];\n\n  return `\n    ${decorativeShapes()}\n\n    <main class=\"list-content\">\n      ${sectionBadge('why_matters')}\n\n      <h1 class=\"section-title\">\n        ${cleanText(slide.title || 'ليش هذا مهم؟')}\n      </h1>\n\n      <div class=\"points-list\">\n        ${numberedPoints(points)}\n      </div>\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderHowTo(slide) {\n  const steps = Array.isArray(slide.steps) ? slide.steps : [];\n\n  return `\n    ${decorativeShapes()}\n\n    <main class=\"list-content\">\n      ${sectionBadge('how_to')}\n\n      <h1 class=\"section-title\">\n        ${cleanText(slide.title || 'كيف تستفيد؟')}\n      </h1>\n\n      <div class=\"points-list\">\n        ${numberedPoints(steps)}\n      </div>\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderSave(slide) {\n  const points = Array.isArray(slide.points) ? slide.points : [];\n\n  return `\n    ${decorativeShapes('light')}\n\n    <main class=\"save-content\">\n      ${sectionBadge('save')}\n\n      <h1 class=\"dark-title\">\n        احفظ هذي المعلومات\n      </h1>\n\n      <div class=\"save-card\">\n        ${numberedPoints(points)}\n      </div>\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderOneLiner(slide) {\n  const text = highlightWord(\n    slide.text || '',\n    slide.grad_word || ''\n  );\n\n  return `\n    ${generatedVisual(slide, 'background')}\n    ${decorativeShapes('cover')}\n\n    <main class=\"quote-content\">\n      ${sectionBadge('one_liner')}\n\n      <div class=\"one-liner\">\n        ${text}\n      </div>\n\n      <div class=\"one-liner-symbol\">✦</div>\n    </main>\n  `;\n}\n\nfunction renderComparison(slide) {\n  const rows = Array.isArray(slide.rows) ? slide.rows : [];\n\n  const rowsHtml = rows\n    .map((row) => {\n      const left = Array.isArray(row) ? row[0] : '';\n      const right = Array.isArray(row) ? row[1] : '';\n\n      return `\n        <div class=\"comparison-row\">\n          <div class=\"comparison-cell first\">\n            ${cleanText(left)}\n          </div>\n\n          <div class=\"comparison-cell second\">\n            ${cleanText(right)}\n          </div>\n        </div>\n      `;\n    })\n    .join('');\n\n  return `\n    ${decorativeShapes()}\n\n    <main class=\"comparison-content\">\n      ${sectionBadge('comparison')}\n\n      <div class=\"comparison-headers\">\n        <div>${cleanText(slide.col1_header || 'الأول')}</div>\n        <div>${cleanText(slide.col2_header || 'الثاني')}</div>\n      </div>\n\n      <div class=\"comparison-table\">\n        ${rowsHtml}\n      </div>\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderQuote(slide) {\n  return `\n    ${generatedVisual(slide, 'background')}\n    ${decorativeShapes('cover')}\n\n    <main class=\"quote-content\">\n      ${sectionBadge('quote')}\n\n      <div class=\"quote-mark\">“</div>\n\n      <div class=\"${compactTextClass(slide.quote, 'quote-text')}\">\n        ${cleanText(slide.quote || '')}\n      </div>\n\n      ${\n        slide.author\n          ? `\n            <div class=\"quote-author\">\n              ${cleanText(slide.author)}\n              ${\n                slide.role\n                  ? `<span>— ${cleanText(slide.role)}</span>`\n                  : ''\n              }\n            </div>\n          `\n          : ''\n      }\n    </main>\n  `;\n}\n\nfunction renderWarning(slide) {\n  const points = Array.isArray(slide.points) ? slide.points : [];\n\n  const warnings = points\n    .map((point) => {\n      return `\n        <div class=\"warning-row\">\n          <div class=\"warning-dot\">!</div>\n          <div>${cleanText(point)}</div>\n        </div>\n      `;\n    })\n    .join('');\n\n  return `\n    ${decorativeShapes()}\n\n    <main class=\"warning-content\">\n      ${sectionBadge('warning')}\n\n      <div class=\"warning-symbol\">!</div>\n\n      <h1 class=\"warning-title\">\n        ${cleanText(slide.title || 'انتبه')}\n      </h1>\n\n      <div class=\"warning-list\">\n        ${warnings}\n      </div>\n\n      ${generatedVisual(slide)}\n    </main>\n  `;\n}\n\nfunction renderActionPrompt(slide) {\n  const action = slide.action || 'save';\n\n  const defaults = {\n    save: {\n      icon: '⌁',\n      title: 'احفظ المنشور',\n      subtitle: 'يمكن تحتاجه بعدين'\n    },\n    share: {\n      icon: '↗',\n      title: 'شارك المنشور',\n      subtitle: 'يمكن يفيد شخص تعرفه'\n    },\n    like: {\n      icon: '♡',\n      title: 'عجبك المحتوى؟',\n      subtitle: 'اضغط مرتين على الشاشة'\n    }\n  };\n\n  const chosen = defaults[action] || defaults.save;\n\n  return `\n    ${generatedVisual(slide, 'background')}\n    ${decorativeShapes('cover')}\n\n    <main class=\"action-content\">\n      <div class=\"action-icon\">\n        ${chosen.icon}\n      </div>\n\n      <div class=\"action-headline\">\n        ${cleanText(slide.headline || chosen.title)}\n      </div>\n\n      <div class=\"action-subtitle\">\n        ${chosen.subtitle}\n      </div>\n\n      <div class=\"brand-stamp\">\n        <span>${BRAND.name}</span>\n        <small>معلومة تستاهل تنتشر</small>\n      </div>\n    </main>\n  `;\n}\n\nfunction renderCTA(slide) {\n  const question = highlightWord(\n    slide.question || 'وش أكثر شيء فاجأك؟',\n    slide.grad_phrase || ''\n  );\n\n  let interaction = '';\n\n  if (\n    slide.cta_style === 'options' &&\n    Array.isArray(slide.options) &&\n    slide.options.length\n  ) {\n    interaction = `\n      <div class=\"cta-options\">\n        ${slide.options\n          .slice(0, 3)\n          .map((option, index) => {\n            const letters = ['A', 'B', 'C'];\n\n            return `\n              <div class=\"cta-option\">\n                <span>${letters[index]}</span>\n                <div>${cleanText(option)}</div>\n              </div>\n            `;\n          })\n          .join('')}\n      </div>\n    `;\n  } else if (slide.cta_style === 'poll') {\n    interaction = `\n      <div class=\"poll-options\">\n        <div class=\"poll-option yes\">\n          ${cleanText(slide.poll_left || 'موافق')}\n        </div>\n\n        <div class=\"poll-option no\">\n          ${cleanText(slide.poll_right || 'مو موافق')}\n        </div>\n      </div>\n    `;\n  } else if (slide.cta_style === 'share') {\n    interaction = `\n      <div class=\"cta-message\">\n        أرسلها للشخص اللي لازم يعرف\n      </div>\n    `;\n  } else if (slide.cta_style === 'follow') {\n    interaction = `\n      <div class=\"cta-message\">\n        تابع فطين للمعلومة الجاية\n      </div>\n    `;\n  } else if (slide.cta_style === 'challenge') {\n    interaction = `\n      <div class=\"cta-message\">\n        جرّبها وارجع خبرنا بالنتيجة\n      </div>\n    `;\n  } else {\n    interaction = `\n      <div class=\"cta-message\">\n        اكتب جوابك في التعليقات\n      </div>\n    `;\n  }\n\n  return `\n    ${decorativeShapes('cover')}\n\n    <main class=\"cta-content\">\n      <div class=\"cta-mini-label\">\n        دورك الحين\n      </div>\n\n      <div class=\"cta-question\">\n        ${question}\n      </div>\n\n      ${interaction}\n\n      <div class=\"fateen-signature\">\n        <div class=\"fateen-logo\">${BRAND.name}</div>\n        <div class=\"fateen-tagline\">\n          ثقافتك لعبة.. والفوز لمن كان فطينًا\n        </div>\n      </div>\n    </main>\n  `;\n}\n\n/*\n|--------------------------------------------------------------------------\n| اختيار التصميم المناسب\n|--------------------------------------------------------------------------\n*/\n\nfunction renderSlideInner(slide, idx) {\n  switch (slide.type) {\n    case 'cover':\n      return renderCover(slide);\n\n    case 'stat':\n      return renderStat(slide);\n\n    case 'why_matters':\n      return renderWhyMatters(slide);\n\n    case 'how_to':\n      return renderHowTo(slide);\n\n    case 'save':\n      return renderSave(slide);\n\n    case 'one_liner':\n      return renderOneLiner(slide);\n\n    case 'comparison':\n      return renderComparison(slide);\n\n    case 'quote':\n      return renderQuote(slide);\n\n    case 'warning':\n      return renderWarning(slide);\n\n    case 'action_prompt':\n      return renderActionPrompt(slide);\n\n    case 'cta':\n      return renderCTA(slide);\n\n    default:\n      return `\n        <main class=\"center-content\">\n          <div class=\"unknown-type\">\n            نوع السلايد غير معروف:\n            ${cleanText(slide.type || '')}\n          </div>\n        </main>\n      `;\n  }\n}\n\n/*\n|--------------------------------------------------------------------------\n| CSS الكامل\n|--------------------------------------------------------------------------\n*/\n\nconst CSS = `\n@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');\n\n:root {\n  --bg: ${BRAND.background};\n  --bg-soft: ${BRAND.backgroundSoft};\n  --cream: ${BRAND.cream};\n  --white: ${BRAND.white};\n  --teal: ${BRAND.teal};\n  --coral: ${BRAND.coral};\n  --yellow: ${BRAND.yellow};\n  --muted: ${BRAND.muted};\n  --dark-text: ${BRAND.darkText};\n}\n\n* {\n  margin: 0;\n  padding: 0;\n  box-sizing: border-box;\n}\n\nhtml,\nbody {\n  width: 1080px;\n  height: 1350px;\n  overflow: hidden;\n}\n\nbody {\n  position: relative;\n  direction: rtl;\n  font-family: 'Cairo', sans-serif;\n  background:\n    radial-gradient(\n      circle at 15% 15%,\n      rgba(54, 194, 180, 0.15),\n      transparent 35%\n    ),\n    radial-gradient(\n      circle at 90% 85%,\n      rgba(255, 131, 100, 0.15),\n      transparent 36%\n    ),\n    var(--bg);\n  color: var(--white);\n}\n\n.brand-header {\n  position: absolute;\n  top: 45px;\n  left: 58px;\n  right: 58px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  direction: ltr;\n  z-index: 30;\n}\n\n.brand-name {\n  direction: rtl;\n  color: var(--white);\n  font-size: 37px;\n  font-weight: 900;\n  letter-spacing: -1px;\n}\n\n.slide-meta {\n  display: flex;\n  align-items: center;\n  gap: 14px;\n}\n\n.episode-number {\n  min-width: 52px;\n  height: 52px;\n  padding: 0 15px;\n  border-radius: 18px;\n  display: grid;\n  place-items: center;\n  color: var(--dark-text);\n  background: var(--yellow);\n  font-size: 25px;\n  font-weight: 900;\n}\n\n.slide-number {\n  width: 52px;\n  height: 52px;\n  border: 1.5px solid rgba(255, 255, 255, 0.24);\n  border-radius: 18px;\n  display: grid;\n  place-items: center;\n  direction: ltr;\n  font-size: 24px;\n  font-weight: 800;\n  color: var(--white);\n  background: rgba(255, 255, 255, 0.06);\n}\n\n.swipe-hint {\n  position: absolute;\n  bottom: 54px;\n  left: 58px;\n  display: flex;\n  align-items: center;\n  gap: 7px;\n  direction: rtl;\n  color: rgba(255, 255, 255, 0.72);\n  font-size: 25px;\n  font-weight: 700;\n  z-index: 30;\n}\n\n.footer-progress {\n  position: absolute;\n  right: 58px;\n  bottom: 65px;\n  display: flex;\n  gap: 8px;\n  direction: ltr;\n  z-index: 30;\n}\n\n.progress-segment {\n  width: 16px;\n  height: 7px;\n  border-radius: 20px;\n  background: rgba(255, 255, 255, 0.16);\n}\n\n.progress-segment.active {\n  width: 34px;\n  background: var(--teal);\n}\n\n.shape,\n.orbit,\n.spark {\n  position: absolute;\n  pointer-events: none;\n}\n\n.glow-one {\n  width: 470px;\n  height: 470px;\n  border-radius: 50%;\n  top: 50px;\n  right: -150px;\n  background: rgba(54, 194, 180, 0.18);\n  filter: blur(5px);\n}\n\n.glow-two {\n  width: 440px;\n  height: 440px;\n  border-radius: 50%;\n  left: -180px;\n  bottom: -80px;\n  background: rgba(255, 131, 100, 0.16);\n  filter: blur(6px);\n}\n\n.orbit {\n  border: 2px solid rgba(255, 255, 255, 0.09);\n  border-radius: 50%;\n}\n\n.orbit-one {\n  width: 570px;\n  height: 570px;\n  top: 80px;\n  right: -220px;\n}\n\n.orbit-two {\n  width: 760px;\n  height: 760px;\n  left: -380px;\n  bottom: -280px;\n}\n\n.spark {\n  color: var(--yellow);\n  font-size: 38px;\n  opacity: 0.8;\n}\n\n.spark-one {\n  top: 235px;\n  left: 115px;\n}\n\n.spark-two {\n  right: 110px;\n  bottom: 240px;\n}\n\n.soft-orb-one {\n  width: 260px;\n  height: 260px;\n  border-radius: 50%;\n  top: 180px;\n  right: -115px;\n  background: rgba(54, 194, 180, 0.12);\n}\n\n.soft-orb-two {\n  width: 310px;\n  height: 310px;\n  border-radius: 50%;\n  bottom: 90px;\n  left: -160px;\n  background: rgba(255, 131, 100, 0.12);\n}\n\n.light-orb-one {\n  width: 370px;\n  height: 370px;\n  border-radius: 50%;\n  top: -120px;\n  left: -140px;\n  background: rgba(54, 194, 180, 0.22);\n}\n\n.light-orb-two {\n  width: 300px;\n  height: 300px;\n  border-radius: 50%;\n  bottom: -120px;\n  right: -80px;\n  background: rgba(245, 201, 91, 0.25);\n}\n\n.generated-background {\n  position: absolute;\n  inset: 0;\n  background-size: cover;\n  background-position: center;\n  z-index: 0;\n}\n\n.generated-overlay {\n  position: absolute;\n  inset: 0;\n  background:\n    linear-gradient(\n      180deg,\n      rgba(11, 31, 42, 0.72),\n      rgba(11, 31, 42, 0.94)\n    );\n  z-index: 1;\n}\n\n.visual-card {\n  width: 100%;\n  max-width: 770px;\n  height: 360px;\n  border-radius: 40px;\n  overflow: hidden;\n  border: 2px solid rgba(255, 255, 255, 0.13);\n  background: rgba(255, 255, 255, 0.05);\n  margin-top: 15px;\n  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.28);\n}\n\n.visual-card img {\n  width: 100%;\n  height: 100%;\n  object-fit: cover;\n}\n\n.cover-content,\n.center-content,\n.list-content,\n.save-content,\n.comparison-content,\n.quote-content,\n.warning-content,\n.action-content,\n.cta-content {\n  position: relative;\n  z-index: 10;\n  width: 100%;\n  height: 100%;\n}\n\n.cover-content {\n  padding: 190px 80px 145px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 34px;\n  text-align: center;\n}\n\n.eyebrow {\n  display: inline-flex;\n  padding: 12px 23px;\n  border-radius: 100px;\n  color: var(--cream);\n  background: rgba(255, 255, 255, 0.08);\n  border: 1px solid rgba(255, 255, 255, 0.11);\n  font-size: 29px;\n  font-weight: 700;\n}\n\n.cover-title {\n  max-width: 920px;\n  color: var(--white);\n  font-size: 82px;\n  font-weight: 900;\n  line-height: 1.38;\n  letter-spacing: -3px;\n}\n\n.cover-title.medium {\n  font-size: 72px;\n}\n\n.cover-title.small {\n  font-size: 63px;\n}\n\n.cover-highlight,\n.highlight {\n  color: var(--yellow);\n}\n\n.cover-highlight.stretched {\n  font-size: 112px;\n  letter-spacing: 9px;\n  line-height: 1.22;\n}\n\n.cover-pill {\n  display: inline-flex;\n  padding: 15px 31px;\n  border-radius: 100px;\n  color: var(--dark-text);\n  background: var(--teal);\n  font-size: 27px;\n  font-weight: 900;\n}\n\n.section-badge {\n  display: inline-flex;\n  align-items: center;\n  gap: 13px;\n  align-self: flex-start;\n  padding: 12px 20px;\n  border-radius: 18px;\n  color: var(--cream);\n  background: rgba(255, 255, 255, 0.075);\n  border: 1px solid rgba(255, 255, 255, 0.1);\n  font-size: 26px;\n  font-weight: 800;\n}\n\n.section-icon {\n  width: 38px;\n  height: 38px;\n  display: grid;\n  place-items: center;\n  border-radius: 12px;\n  color: var(--dark-text);\n  background: var(--yellow);\n  font-size: 23px;\n  font-weight: 900;\n}\n\n.center-content {\n  padding: 185px 80px 140px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 30px;\n  text-align: center;\n}\n\n.stat-number {\n  color: var(--yellow);\n  font-size: 245px;\n  font-weight: 900;\n  line-height: 1;\n  letter-spacing: -10px;\n}\n\n.stat-label {\n  max-width: 850px;\n  color: var(--white);\n  font-size: 60px;\n  font-weight: 900;\n  line-height: 1.4;\n}\n\n.stat-emoji {\n  font-size: 95px;\n}\n\n.body-text {\n  max-width: 850px;\n  color: var(--cream);\n  font-size: 42px;\n  font-weight: 700;\n  line-height: 1.75;\n}\n\n.body-text.medium {\n  font-size: 38px;\n}\n\n.body-text.small {\n  font-size: 34px;\n}\n\n.body-text.extra-small {\n  font-size: 31px;\n}\n\n.list-content {\n  padding: 180px 70px 140px;\n  display: flex;\n  flex-direction: column;\n  gap: 35px;\n}\n\n.section-title {\n  max-width: 900px;\n  color: var(--white);\n  font-size: 67px;\n  font-weight: 900;\n  line-height: 1.35;\n  letter-spacing: -2px;\n}\n\n.points-list {\n  display: flex;\n  flex-direction: column;\n  gap: 22px;\n  width: 100%;\n}\n\n.point-row {\n  min-height: 114px;\n  display: flex;\n  align-items: center;\n  gap: 25px;\n  padding: 21px 25px;\n  border-radius: 27px;\n  background: rgba(255, 255, 255, 0.055);\n  border: 1px solid rgba(255, 255, 255, 0.085);\n}\n\n.point-number {\n  width: 66px;\n  height: 66px;\n  flex: 0 0 66px;\n  display: grid;\n  place-items: center;\n  border-radius: 22px;\n  color: var(--dark-text);\n  background: var(--teal);\n  font-size: 28px;\n  font-weight: 900;\n}\n\n.point-text {\n  color: var(--cream);\n  font-size: 38px;\n  font-weight: 800;\n  line-height: 1.55;\n}\n\n.point-text.medium {\n  font-size: 34px;\n}\n\n.point-text.small {\n  font-size: 30px;\n}\n\n.save-content {\n  padding: 180px 70px 140px;\n  display: flex;\n  flex-direction: column;\n  gap: 31px;\n  background: var(--cream);\n  color: var(--dark-text);\n}\n\n.save-content .section-badge {\n  color: var(--dark-text);\n  background: rgba(16, 36, 46, 0.075);\n  border-color: rgba(16, 36, 46, 0.1);\n}\n\n.dark-title {\n  max-width: 900px;\n  color: var(--dark-text);\n  font-size: 68px;\n  font-weight: 900;\n  line-height: 1.35;\n}\n\n.save-card {\n  display: flex;\n  flex-direction: column;\n  gap: 18px;\n  padding: 31px;\n  border-radius: 37px;\n  background: var(--white);\n  box-shadow: 0 25px 65px rgba(16, 36, 46, 0.12);\n}\n\n.save-card .point-row {\n  background: rgba(16, 36, 46, 0.045);\n  border-color: rgba(16, 36, 46, 0.07);\n}\n\n.save-card .point-text {\n  color: var(--dark-text);\n}\n\n.quote-content {\n  padding: 190px 82px 145px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 37px;\n  text-align: center;\n}\n\n.one-liner {\n  max-width: 900px;\n  color: var(--white);\n  font-size: 82px;\n  font-weight: 900;\n  line-height: 1.55;\n  letter-spacing: -2px;\n}\n\n.one-liner-symbol {\n  color: var(--yellow);\n  font-size: 68px;\n}\n\n.quote-mark {\n  color: var(--yellow);\n  font-size: 145px;\n  font-weight: 900;\n  line-height: 0.6;\n}\n\n.quote-text {\n  max-width: 900px;\n  color: var(--white);\n  font-size: 54px;\n  font-weight: 800;\n  line-height: 1.65;\n}\n\n.quote-text.medium {\n  font-size: 48px;\n}\n\n.quote-text.small {\n  font-size: 42px;\n}\n\n.quote-text.extra-small {\n  font-size: 37px;\n}\n\n.quote-author {\n  display: flex;\n  flex-direction: column;\n  gap: 7px;\n  color: var(--teal);\n  font-size: 31px;\n  font-weight: 900;\n}\n\n.quote-author span {\n  color: var(--muted);\n  font-size: 25px;\n  font-weight: 700;\n}\n\n.comparison-content {\n  padding: 180px 65px 140px;\n  display: flex;\n  flex-direction: column;\n  gap: 28px;\n}\n\n.comparison-headers {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 14px;\n}\n\n.comparison-headers div {\n  padding: 20px;\n  border-radius: 23px;\n  text-align: center;\n  color: var(--dark-text);\n  background: var(--yellow);\n  font-size: 31px;\n  font-weight: 900;\n}\n\n.comparison-headers div:last-child {\n  background: var(--teal);\n}\n\n.comparison-table {\n  display: flex;\n  flex-direction: column;\n  gap: 13px;\n}\n\n.comparison-row {\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 13px;\n}\n\n.comparison-cell {\n  min-height: 115px;\n  padding: 23px;\n  display: grid;\n  place-items: center;\n  border-radius: 25px;\n  text-align: center;\n  color: var(--cream);\n  background: rgba(255, 255, 255, 0.055);\n  border: 1px solid rgba(255, 255, 255, 0.085);\n  font-size: 31px;\n  font-weight: 800;\n  line-height: 1.45;\n}\n\n.comparison-cell.second {\n  background: rgba(54, 194, 180, 0.09);\n}\n\n.warning-content {\n  padding: 180px 74px 140px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 26px;\n  text-align: center;\n}\n\n.warning-symbol {\n  width: 145px;\n  height: 145px;\n  display: grid;\n  place-items: center;\n  border-radius: 50%;\n  color: var(--dark-text);\n  background: var(--coral);\n  font-size: 83px;\n  font-weight: 900;\n}\n\n.warning-title {\n  color: var(--white);\n  font-size: 70px;\n  font-weight: 900;\n}\n\n.warning-list {\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 17px;\n  text-align: right;\n}\n\n.warning-row {\n  min-height: 100px;\n  display: flex;\n  align-items: center;\n  gap: 21px;\n  padding: 20px 25px;\n  border-radius: 25px;\n  color: var(--cream);\n  background: rgba(255, 131, 100, 0.085);\n  border: 1px solid rgba(255, 131, 100, 0.18);\n  font-size: 34px;\n  font-weight: 800;\n  line-height: 1.5;\n}\n\n.warning-dot {\n  width: 58px;\n  height: 58px;\n  flex: 0 0 58px;\n  display: grid;\n  place-items: center;\n  border-radius: 18px;\n  color: var(--dark-text);\n  background: var(--coral);\n  font-size: 31px;\n  font-weight: 900;\n}\n\n.action-content {\n  padding: 190px 80px 150px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 30px;\n  text-align: center;\n}\n\n.action-icon {\n  width: 195px;\n  height: 195px;\n  display: grid;\n  place-items: center;\n  border-radius: 58px;\n  color: var(--dark-text);\n  background: var(--yellow);\n  font-size: 102px;\n  font-weight: 900;\n  transform: rotate(-4deg);\n  box-shadow: 0 28px 80px rgba(245, 201, 91, 0.2);\n}\n\n.action-headline {\n  max-width: 900px;\n  color: var(--white);\n  font-size: 68px;\n  font-weight: 900;\n  line-height: 1.4;\n}\n\n.action-subtitle {\n  color: var(--muted);\n  font-size: 32px;\n  font-weight: 700;\n}\n\n.brand-stamp {\n  margin-top: 30px;\n  display: flex;\n  flex-direction: column;\n  gap: 5px;\n}\n\n.brand-stamp span {\n  color: var(--teal);\n  font-size: 48px;\n  font-weight: 900;\n}\n\n.brand-stamp small {\n  color: var(--muted);\n  font-size: 24px;\n  font-weight: 700;\n}\n\n.cta-content {\n  padding: 190px 75px 135px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 35px;\n  text-align: center;\n}\n\n.cta-mini-label {\n  padding: 11px 24px;\n  border-radius: 100px;\n  color: var(--dark-text);\n  background: var(--yellow);\n  font-size: 27px;\n  font-weight: 900;\n}\n\n.cta-question {\n  max-width: 920px;\n  color: var(--white);\n  font-size: 65px;\n  font-weight: 900;\n  line-height: 1.5;\n}\n\n.cta-options {\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 15px;\n}\n\n.cta-option {\n  min-height: 101px;\n  padding: 18px 24px;\n  display: flex;\n  align-items: center;\n  gap: 22px;\n  border-radius: 27px;\n  color: var(--cream);\n  background: rgba(255, 255, 255, 0.065);\n  border: 1px solid rgba(255, 255, 255, 0.1);\n  text-align: right;\n  font-size: 32px;\n  font-weight: 800;\n}\n\n.cta-option span {\n  width: 57px;\n  height: 57px;\n  flex: 0 0 57px;\n  display: grid;\n  place-items: center;\n  border-radius: 18px;\n  color: var(--dark-text);\n  background: var(--teal);\n  font-size: 24px;\n  font-weight: 900;\n}\n\n.poll-options {\n  width: 100%;\n  display: grid;\n  grid-template-columns: 1fr 1fr;\n  gap: 16px;\n}\n\n.poll-option {\n  padding: 31px 20px;\n  border-radius: 27px;\n  color: var(--dark-text);\n  font-size: 34px;\n  font-weight: 900;\n}\n\n.poll-option.yes {\n  background: var(--teal);\n}\n\n.poll-option.no {\n  background: var(--coral);\n}\n\n.cta-message {\n  width: 100%;\n  padding: 29px;\n  border-radius: 29px;\n  color: var(--dark-text);\n  background: var(--teal);\n  font-size: 34px;\n  font-weight: 900;\n}\n\n.fateen-signature {\n  margin-top: 25px;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  gap: 8px;\n}\n\n.fateen-logo {\n  color: var(--white);\n  font-size: 56px;\n  font-weight: 900;\n}\n\n.fateen-tagline {\n  color: var(--muted);\n  font-size: 23px;\n  font-weight: 700;\n}\n\n.unknown-type {\n  color: var(--white);\n  font-size: 42px;\n  font-weight: 800;\n}\n`;\n\n/*\n|--------------------------------------------------------------------------\n| إنشاء سلايد HTML منفصل لكل عنصر\n|--------------------------------------------------------------------------\n*/\n\nconst results = [];\n\nfor (let i = 0; i < N; i++) {\n  const slide = slides[i];\n  const slideContent = renderSlideInner(slide, i);\n\n  const html = `\n    <!DOCTYPE html>\n    <html lang=\"ar\" dir=\"rtl\">\n      <head>\n        <meta charset=\"UTF-8\" />\n        <meta\n          name=\"viewport\"\n          content=\"width=1080, height=1350, initial-scale=1\"\n        />\n\n        <title>\n          ${cleanText(data.topic || 'فطين')} — ${i + 1}\n        </title>\n\n        <style>\n          ${CSS}\n        </style>\n      </head>\n\n      <body>\n        ${brandHeader(i)}\n        ${slideContent}\n        ${footerProgress(i)}\n        ${swipeHint(i)}\n      </body>\n    </html>\n  `;\n\n  results.push({\n    json: {\n      html,\n      slideNumber: i + 1,\n      totalSlides: N,\n      slideType: slide.type,\n      topic: data.topic || '',\n      caption: data.caption || '',\n      hashtags: data.hashtags || '',\n      imagePrompt: slide.image_prompt || '',\n      generatedImageUrl:\n        slide.image_url ||\n        slide.visual_url ||\n        slide.background_image ||\n        ''\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "477912fc-e6cd-4b9a-906c-1c33f1e4c859",
+      "name": "Generate Individual Slides",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hcti.io/v1/image",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=={{\n{\n  \"html\": $json.html,\n  \"viewport_width\": 1080,\n  \"viewport_height\": 1350,\n  \"device_scale\": 2\n}\n}}",
+        "options": {}
+      },
+      "id": "3b108767-07d5-43db-a770-3c6b3a4b9694",
+      "name": "HCTI API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -160,
+        464
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "InygP5CM3ZEjEvoi",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "c3bb832e-1950-449e-8895-4b5fef6bad39",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendPhoto",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "=🎨 سلايد {{ $('Generate Individual Slides').item.json.slideNumber }} / {{ $('Generate Individual Slides').item.json.totalSlides }}{{ $('Generate Individual Slides').item.json.slideNumber === $('Generate Individual Slides').item.json.totalSlides ? '\\n✅ السلايدات جاهزة!' : '' }}"
+        }
+      },
+      "id": "1fc01024-c40d-4660-9d26-356273e12f76",
+      "name": "Send Image",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        528
+      ],
+      "webhookId": "79eec94b-1c0e-4c5f-9f8a-34c26aa3dbd5",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "👋 أهلاً! أنا بوت الكاروسيل\n\n📌 أرسل موضوع وأنا أجهز لك المحتوى\n✅ أرسل \"approve\" أو \"موافق\" للتصميم\n📸 أرسل \"export\" أو \"صدر\" لتصدير الصور\n📤 أرسل \"post\" أو \"انشر\" للنشر على\nInstagram\n\nجرب أرسل لي أي موضوع!",
+        "additionalFields": {}
+      },
+      "id": "6bd7e211-8384-448e-a95c-2dba6404c22a",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -816,
+        912
+      ],
+      "webhookId": "4c47e327-8e10-4c89-b42d-13d2a871350b",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "68edb5f6-c4d7-4847-9f21-cdddd809a3cf",
+      "name": "Aggregate HCTI URLs",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        80,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.first().json.data || [];\nconst urls = [];\nfor (const item of allItems) {\n  const url = item.url || '';\n  if (url) urls.push(url);\n}\n\n// Get the row ID from the Update to Exported node\nlet rowId = '';\ntry {\n  rowId = $('Update to Exported').first().json.id || '';\n} catch(e) {\n  try {\n    rowId = $('Get Last Approved').first().json.id || '';\n  } catch(e2) {}\n}\n\nreturn [{ json: { imageUrls: JSON.stringify(urls), rowId, urlCount: urls.length } }];\n"
+      },
+      "id": "10179ec6-e314-4bf2-a572-842b6a249a6b",
+      "name": "Collect Image URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.rowId }}",
+            "image_urls": "={{ $json.imageUrls }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_urls",
+              "displayName": "image_urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1e789b94-4d67-46fc-8dcb-98675836358b",
+      "name": "Save Image URLs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        720
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "✅ تم حفظ الصور!\n\n📸 أرسل \"post\" أو \"انشر\" لنشر الكاروسيل على\nInstagram\nمباشرة",
+        "additionalFields": {}
+      },
+      "id": "15ce1ecc-8726-4ce2-a910-1d7d78aa7fe5",
+      "name": "Send Post Hint",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        752,
+        720
+      ],
+      "webhookId": "e1f14f9c-d3d4-4f05-a0bb-7d2d39d3f8f2",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-post",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "post",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4b1af9e2-f2db-4370-882f-ac4808a54e54",
+      "name": "Is Post?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1712,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "📤 جاري النشر على\nInstagram...\nانتظر شوي",
+        "additionalFields": {}
+      },
+      "id": "90050282-fca5-4838-85cb-9ff0c7ea8176",
+      "name": "Send Posting",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1488,
+        1296
+      ],
+      "webhookId": "f1803ad1-0497-463a-8828-8a34075a1049",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a0be3b30-41c6-4005-8513-25c5f9e2dc7b",
+      "name": "Read Exported Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1264,
+        1296
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet lastExported = null;\nfor (let i = items.length - 1; i >= 0; i--) {\n  if (items[i].json.status === 'exported') {\n    lastExported = items[i].json;\n    break;\n  }\n}\nif (!lastExported) throw new Error('No exported rows found');\n\nconst imageUrls = JSON.parse(lastExported.image_urls || '[]');\nconst caption = lastExported.caption || '';\n\nreturn [{ json: { ...lastExported, imageUrls, caption, imageCount: imageUrls.length } }];"
+      },
+      "id": "29012c24-9264-451f-bc4e-ad74b8dca497",
+      "name": "Get Last Exported",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Full Instagram Carousel Publishing via Meta Graph API\nconst igUserId = 'YOUR_IG_NUMERIC_USER_ID';\nconst accessToken = 'YOUR_INSTAGRAM_ACCESS_TOKEN';\n// cloudName removed (no longer used)\n// cloudKey removed (no longer used)\n// cloudSecret removed (no longer used)\nlet caption = $json.caption || '';\nif (!caption) {\n  try {\n    const raw = $json.content || '';\n    const start = raw.indexOf('{');\n    const end = raw.lastIndexOf('}');\n    if (start >= 0 && end > start) {\n      const data = JSON.parse(raw.substring(start, end + 1));\n      const hashtags = data.hashtags || '';\n      caption = (data.caption || '') + '\\n\\n' + hashtags;\n    }\n  } catch(e) {}\n}\nconst rowId = $json.id;\n\nconst sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));\nconst crypto = require('crypto');\n\n// Read saved HCTI URLs from sheet\nlet imageUrls = [];\nconst raw = $json.image_urls || $json.imageUrls || '[]';\ntry {\n  imageUrls = JSON.parse(raw);\n} catch(e) {\n  imageUrls = [];\n}\n\nif (!imageUrls.length) throw new Error('No image URLs found in sheet. Run export first.');\n\n// TEST: Skip Cloudinary - use HCTI URLs directly (HCTI URLs are public)\nconst publicUrls = imageUrls;\n\n// Step 2: Create IG containers SEQUENTIALLY with retry (reliable)\nconst createContainer = async (publicUrl, i, attempt = 1) => {\n  const igRes = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://graph.instagram.com/v21.0/${igUserId}/media`,\n    qs: { image_url: publicUrl, is_carousel_item: 'true', access_token: accessToken },\n    returnFullResponse: true,\n    ignoreHttpStatusErrors: true\n  });\n  if (igRes.body?.id) return igRes.body.id;\n  if (attempt < 3) {\n    await sleep(2000 * attempt);\n    return createContainer(publicUrl, i, attempt + 1);\n  }\n  throw new Error('IG ITEM ERROR ' + (i+1) + ' after 3 tries | Status: ' + igRes.statusCode + ' | ' + JSON.stringify(igRes.body));\n};\nconst containerIds = [];\nfor (let i = 0; i < publicUrls.length; i++) {\n  containerIds.push(await createContainer(publicUrls[i], i));\n  await sleep(800);\n}\n\nconst carouselRes = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `https://graph.instagram.com/v21.0/${igUserId}/media`,\n  qs: { media_type: 'CAROUSEL', children: containerIds.join(','), caption, access_token: accessToken },\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true\n});\nif (!carouselRes.body?.id) {\n  throw new Error('IG CAROUSEL ERROR | Status: ' + carouselRes.statusCode + ' | ' + JSON.stringify(carouselRes.body));\n}\nconst carousel = carouselRes.body;\n\nawait sleep(1000);\n\nconst publishedRes = await this.helpers.httpRequest({\n  method: 'POST',\n  url: `https://graph.instagram.com/v21.0/${igUserId}/media_publish`,\n  qs: { creation_id: carousel.id, access_token: accessToken },\n  returnFullResponse: true,\n  ignoreHttpStatusErrors: true\n});\nif (!publishedRes.body?.id) {\n  throw new Error('IG PUBLISH ERROR | Status: ' + publishedRes.statusCode + ' | ' + JSON.stringify(publishedRes.body));\n}\nconst published = publishedRes.body;\n\n// Get permalink\nlet permalink = '';\ntry {\n  const media = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `https://graph.instagram.com/v21.0/${published.id}?fields=permalink&access_token=${accessToken}`\n  });\n  permalink = media.permalink || '';\n} catch(e) {}\n\nreturn [{ json: { postId: published.id, carouselId: carousel.id, rowId, permalink } }];\n"
+      },
+      "id": "f4b554f7-c8dd-4ee6-a823-22bed4a4767a",
+      "name": "Create Image Containers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.rowId }}",
+            "status": "published",
+            "instagram_post_id": "={{ $json.postId }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "instagram_post_id",
+              "displayName": "instagram_post_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a40faa1b-612b-4821-98d1-72ced4153d86",
+      "name": "Update to Published",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -592,
+        1296
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "=✅ تم النشر على Instagram!\n\n📱 الكاروسيل نزل على حسابك\n🔗 شوفه هني: {{ $('Create Image Containers').item.json.permalink }}\n\n\n🎉 الحين روح شيك عليه!\n",
+        "additionalFields": {}
+      },
+      "id": "abb5d1a9-1c6f-4a0e-bdb7-6caca9dad641",
+      "name": "Send Published",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        1296
+      ],
+      "webhookId": "b176608d-392d-4a02-aff6-7d3d4159c971",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const topic = String($json.originalText || '').trim();\n\nif (!topic) {\n  throw new Error('لم يتم استلام موضوع لإنشاء المحتوى');\n}\n\nconst systemPrompt = `\nأنت مدير محتوى محترف لمنصة فطين، متخصص في تحويل الأخبار التقنية\nوالمعلومات الغريبة والمفيدة إلى كاروسيل عربي جذاب لإنستغرام وتيك توك.\n\nاكتب بلهجة خليجية طبيعية وسهلة، قريبة من الجمهور العُماني، بدون مبالغة\nأو تعبيرات كويتية ثقيلة.\n\nقواعد اللغة:\n- استخدم \"مو\" أو \"ما\" حسب السياق.\n- استخدم \"شو\" أو \"شنو\" باعتدال، والأفضل صياغة عربية خليجية مفهومة.\n- لا تستخدم \"وش\" أو \"إيش\".\n- استخدم \"هذا\" وليس \"ذا\".\n- استخدم \"مثل\" وليس \"زي\".\n- استخدم \"تبي\" وليس \"تبغى\".\n- استخدم \"دور على\" وليس \"أدور على\".\n- استخدم \"وصولك\" وليس \"الوصول حقك\".\n- استخدم \"صورتك\" وليس \"الصورة حقتك\".\n- استخدم \"انتبه\" أو \"لاحظ\" بدل \"خلي بالك\".\n- استخدم الأرقام الإنجليزية فقط: 1، 2، 37.\n- السنة الحالية 2026.\n- لا تذكر 2024 أو 2025 إلا عند المقارنة أو إذا كانت ضمن حقيقة المصدر.\n- لا تخترع أرقامًا أو إحصائيات أو تصريحات.\n- إذا لم تتأكد من اقتباس، لا تستخدم نوع quote.\n- لا تضف معلومات غير موجودة في الموضوع.\n- اجعل الجمل قصيرة ومناسبة للتصميم.\n- لا تضع نصوصًا طويلة داخل السلايد.\n- الهاشتاقات: 3 فقط، بدون زيادة أو نقصان.\n- لا تقدم نصائح عن عدد الهاشتاقات.\n- لا تستخدم Markdown.\n- لا ترجع أي نص خارج JSON.\n\nالهوك:\n- السلايد الأول دائمًا cover.\n- اجعله قويًا ومختلفًا حسب الموضوع.\n- نوّع بين: سؤال صادم، حقيقة غريبة، رقم موثوق، تحدٍ، مقارنة، أو عبارة استفزازية.\n- لا تستخدم رقمًا إلا إذا كان موجودًا في المصدر.\n- لا تكرر نفس نمط الهوك بلا داعٍ.\n- لا تكشف كل المعلومة في أول سلايد.\n\nحجم الكاروسيل:\n- موضوع بسيط: من 4 إلى 5 سلايدات إجمالًا.\n- موضوع متوسط: من 5 إلى 6 سلايدات إجمالًا.\n- موضوع كبير: من 6 إلى 8 سلايدات إجمالًا.\n- العدد الإجمالي يشمل cover وaction_prompt وcta.\n- slide_count يجب أن يساوي عدد العناصر داخل slides بالضبط.\n\nترتيب السلايدات:\n1. أول سلايد: cover.\n2. السلايدات الوسطى: اختر الأنواع المناسبة فقط.\n3. قبل الأخير دائمًا: action_prompt.\n4. الأخير دائمًا: cta.\n\nأنواع السلايدات الوسطى:\n- stat: فقط عند وجود رقم أو إحصائية موثوقة.\n- why_matters: لتوضيح أهمية الخبر.\n- how_to: عند وجود خطوات عملية حقيقية.\n- save: عند وجود معلومات مفيدة للحفظ.\n- one_liner: لجملة قوية ومختصرة.\n- comparison: عند وجود مقارنة واضحة.\n- quote: فقط عند وجود اقتباس حقيقي واسم صاحبه.\n- warning: عند وجود تحذير أو خطأ شائع.\n\nلا تستخدم جميع الأنواع في كاروسيل واحد.\nاختر من 1 إلى 4 أنواع وسطية حسب حجم الموضوع.\nنوّع الترتيب بحسب طبيعة المحتوى.\n\nالكفر:\n- cover_style أحد القيم:\n  normal\n  stat\n  question\n  stretched\n\nعند اختيار stretched:\n- ضع stretched بقيمة true.\n- title_line2_grad يجب أن تكون كلمة عربية واحدة قوية.\n- اكتب الكلمة طبيعيًا بدون تطويل بالحروف.\n- لا تستخدم stretched في كل كاروسيل.\n\naction_prompt:\n- استخدم save للمعلومات العملية والمفيدة.\n- استخدم share للمحتوى المهم أو المثير للنقاش.\n- استخدم like للمحتوى الخفيف أو المفاجئ.\n- action يجب أن يكون: save أو share أو like.\n- headline جملة قصيرة من 4 إلى 7 كلمات.\n\nCTA:\nاختر النمط الأنسب:\n- options: سؤال له 3 خيارات واضحة.\n- poll: خياران متقابلان.\n- open: سؤال مفتوح.\n- share: تشجيع منطقي للمشاركة.\n- follow: عندما يكون المحتوى جزءًا من سلسلة مفيدة.\n- challenge: عند وجود تجربة أو خطوة قابلة للتطبيق.\n\nعند عدم استخدام options:\n- اجعل options مصفوفة فارغة.\n\nعند عدم استخدام poll:\n- اجعل poll_left وpoll_right نصين فارغين.\n\nالكابشن:\n- قصير وجذاب.\n- لا يكرر نص السلايدات حرفيًا.\n- يبدأ بجملة تشد الانتباه.\n- ينتهي بسؤال أو دعوة مناسبة للتفاعل.\n- بدون حشو.\n\nأرجع JSON صالحًا فقط، بهذا الهيكل:\n\n{\n  \"topic\": \"عنوان مختصر\",\n  \"slide_count\": 5,\n  \"slides\": [\n    {\n      \"type\": \"cover\",\n      \"eyebrow\": \"وصف قصير جدًا\",\n      \"title_line1\": \"السطر الأول\",\n      \"title_line2_grad\": \"الكلمة المميزة\",\n      \"title_line3\": \"باقي العنوان\",\n      \"pill\": \"بادج مختصر\",\n      \"stretched\": false,\n      \"cover_style\": \"normal\"\n    },\n    {\n      \"type\": \"why_matters\",\n      \"title\": \"ليش هذا مهم؟\",\n      \"points\": [\n        \"نقطة قصيرة\",\n        \"نقطة قصيرة\",\n        \"نقطة قصيرة\"\n      ]\n    },\n    {\n      \"type\": \"one_liner\",\n      \"text\": \"جملة قوية ومختصرة\",\n      \"grad_word\": \"الكلمة\"\n    },\n    {\n      \"type\": \"action_prompt\",\n      \"action\": \"save\",\n      \"headline\": \"احفظ المعلومة قبل تنساها\"\n    },\n    {\n      \"type\": \"cta\",\n      \"question\": \"السؤال الأخير\",\n      \"grad_phrase\": \"العبارة المميزة\",\n      \"cta_style\": \"open\",\n      \"options\": [],\n      \"poll_left\": \"\",\n      \"poll_right\": \"\"\n    }\n  ],\n  \"caption\": \"كابشن قصير وجذاب\",\n  \"hashtags\": \"#فطين #معلومات #تقنية\"\n}\n\nاستخدم فقط الحقول المناسبة لكل type، مع الالتزام بالحقول التالية:\n\nstat:\n{\n  \"type\": \"stat\",\n  \"number\": \"الرقم\",\n  \"label\": \"وصف الرقم\",\n  \"description\": \"شرح مختصر\",\n  \"emoji\": \"\"\n}\n\nwhy_matters:\n{\n  \"type\": \"why_matters\",\n  \"title\": \"العنوان\",\n  \"points\": [\"نقطة 1\", \"نقطة 2\", \"نقطة 3\"]\n}\n\nhow_to:\n{\n  \"type\": \"how_to\",\n  \"title\": \"العنوان\",\n  \"steps\": [\"خطوة 1\", \"خطوة 2\", \"خطوة 3\"]\n}\n\nsave:\n{\n  \"type\": \"save\",\n  \"points\": [\"معلومة 1\", \"معلومة 2\", \"معلومة 3\"]\n}\n\none_liner:\n{\n  \"type\": \"one_liner\",\n  \"text\": \"الجملة\",\n  \"grad_word\": \"الكلمة\"\n}\n\ncomparison:\n{\n  \"type\": \"comparison\",\n  \"col1_header\": \"الأول\",\n  \"col2_header\": \"الثاني\",\n  \"rows\": [\n    [\"قيمة 1\", \"قيمة 2\"],\n    [\"قيمة 1\", \"قيمة 2\"]\n  ]\n}\n\nquote:\n{\n  \"type\": \"quote\",\n  \"quote\": \"الاقتباس الحقيقي\",\n  \"author\": \"الاسم\",\n  \"role\": \"المنصب\"\n}\n\nwarning:\n{\n  \"type\": \"warning\",\n  \"title\": \"انتبه!\",\n  \"points\": [\"تحذير 1\", \"تحذير 2\", \"تحذير 3\"]\n}\n`;\n\nconst requestBody = {\n  model: 'claude-sonnet-5',\n  max_tokens: 12000,\n  system: systemPrompt,\n  messages: [\n    {\n      role: 'user',\n      content: `أنشئ كاروسيل كامل عن الموضوع التالي:\n\n${topic}\n\nتأكد قبل الإرسال من:\n- صحة JSON.\n- عدم وجود نص خارج JSON.\n- تطابق slide_count مع عدد السلايدات.\n- وجود cover في البداية.\n- وجود action_prompt قبل الأخير.\n- وجود cta في النهاية.\n- استخدام 3 هاشتاقات بالضبط.`\n    }\n  ]\n};\n\nreturn [\n  {\n    json: {\n      requestBody,\n      originalText: topic\n    }\n  }\n];"
+      },
+      "id": "f5cfaee8-6a7a-4e81-97bd-b0cfada6834a",
+      "name": "Build Claude Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-news",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "news",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "88e33b4a-2c80-401e-85ef-e0261bc89c7d",
+      "name": "Is News?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1264,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// RSS Feeds - easily changeable for onboarding (RSS_FEEDS)\nconst RSS_FEEDS = [\n  '__YOUR_RSS_FEED_1__',\n  '__YOUR_RSS_FEED_2__',\n  '__YOUR_RSS_FEED_3__',\n  '__YOUR_RSS_FEED_4__',\n  '__YOUR_RSS_FEED_5__',\n  '__YOUR_RSS_FEED_6__',\n  '__YOUR_RSS_FEED_7__',\n  '__YOUR_RSS_FEED_8__',\n  '__YOUR_RSS_FEED_9__',\n  '__YOUR_RSS_FEED_10__'\n];\n\nconst allArticles = [];\n\nfor (const feedUrl of RSS_FEEDS) {\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url: feedUrl,\n      headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n    });\n    \n    const xml = typeof res === 'string' ? res : JSON.stringify(res);\n    const items = xml.split('<item>').slice(1, 8);\n    \n    for (const item of items) {\n      const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n      const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n      const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n      const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n      \n      const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n      const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n      let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n      desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n      const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n      const source = feedUrl.includes('socialmediaexaminer') ? 'SME' :\n                     feedUrl.includes('anthropic') ? 'Anthropic' :\n                     feedUrl.includes('openai') ? 'OpenAI' :\n                     feedUrl.includes('venturebeat') ? 'VB' :\n                     feedUrl.includes('theverge') ? 'Verge' :\n                     feedUrl.includes('later') ? 'Later' :\n                     feedUrl.includes('techcrunch') && feedUrl.includes('artificial') ? 'TC-AI' :\n                     feedUrl.includes('techcrunch') ? 'TC' :\n                     feedUrl.includes('buffer') ? 'Buffer' : 'WERSM';\n      \n      // Filter: only Instagram-related articles (skip Buffer general articles)\n      const aiSources = ['Anthropic','OpenAI','VB','Verge','TC-AI'];\n      const isAI = aiSources.includes(source);\n      const isInstagram = isAI || source !== 'Buffer' || \n        (title + ' ' + desc).toLowerCase().includes('instagram') ||\n        (title + ' ' + desc).toLowerCase().includes('reels') ||\n        (title + ' ' + desc).toLowerCase().includes('meta');\n      \n      if (title && link && isInstagram) {\n        allArticles.push({ title, link, desc, pubDate, source });\n      }\n    }\n  } catch (e) {\n    // Skip failed feeds\n  }\n}\n\n// Sort by date (newest first) and take top 5\nallArticles.sort((a, b) => b.pubDate - a.pubDate);\nconst top5 = allArticles.slice(0, 10);\n\n// Build the message\nlet msg = '📰 آخر الأخبار (إنستقرام + AI):\\n\\n';\ntop5.forEach((a, i) => {\n  msg += (i + 1) + '️⃣ ' + a.title + '\\n';\n  msg += '📝 ' + a.desc + '\\n';\n  msg += '🔗 ' + a.link + '\\n';\n  msg += '📌 ' + a.source + '\\n\\n';\n});\nmsg += '✍️ رد برقم الخبر عشان أسوي لك كاروسيل منه!';\n\nconst staticData = $getWorkflowStaticData('global');\nstaticData.newsCache = top5;\nstaticData.newsCacheAt = Date.now();\nreturn [{ json: { newsMessage: msg, articles: JSON.stringify(top5), chatId: $json.chatId } }];"
+      },
+      "id": "71557fcf-72ec-4429-b448-0b86ffa72a15",
+      "name": "Fetch RSS Feeds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.newsMessage }}",
+        "additionalFields": {
+          "disable_web_page_preview": true
+        }
+      },
+      "id": "6b8cd459-88b1-4520-a048-e9af1a28d3f2",
+      "name": "Send News List",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -816,
+        720
+      ],
+      "webhookId": "ffe19992-fad6-495e-8556-0285ec2e1124",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass articles data through for pickup by number\n// Articles are stored in the Telegram message itself\n// When user picks a number, we re-fetch and pick\nreturn [{ json: { saved: true, articles: $json.articles, chatId: $json.chatId } }];"
+      },
+      "id": "ce5060a2-2cbe-4f04-8d44-0756948b6735",
+      "name": "Save News Cache",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-select",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "selectarticle",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cf022d87-3fa4-4ac2-a1b6-d046485e1813",
+      "name": "Is News Pick?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1040,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pickNum = parseInt($json.originalText);\nconst chatId = $json.chatId;\n\n// Re-fetch RSS to get the same articles\nconst RSS_FEEDS = [\n  '__YOUR_RSS_FEED_1__',\n  '__YOUR_RSS_FEED_2__',\n  '__YOUR_RSS_FEED_3__',\n  '__YOUR_RSS_FEED_4__',\n  '__YOUR_RSS_FEED_5__',\n  '__YOUR_RSS_FEED_6__',\n  '__YOUR_RSS_FEED_7__',\n  '__YOUR_RSS_FEED_8__',\n  '__YOUR_RSS_FEED_9__',\n  '__YOUR_RSS_FEED_10__'\n];\n\nconst allArticles = [];\nfor (const feedUrl of RSS_FEEDS) {\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url: feedUrl,\n      headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n    });\n    const xml = typeof res === 'string' ? res : JSON.stringify(res);\n    const items = xml.split('<item>').slice(1, 8);\n    for (const item of items) {\n      const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n      const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n      const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n      const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n      const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n      const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n      let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n      desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n      const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n      const source = feedUrl.includes('socialmediaexaminer') ? 'SME' :\n                     feedUrl.includes('anthropic') ? 'Anthropic' :\n                     feedUrl.includes('openai') ? 'OpenAI' :\n                     feedUrl.includes('venturebeat') ? 'VB' :\n                     feedUrl.includes('theverge') ? 'Verge' :\n                     feedUrl.includes('later') ? 'Later' :\n                     feedUrl.includes('techcrunch') && feedUrl.includes('artificial') ? 'TC-AI' :\n                     feedUrl.includes('techcrunch') ? 'TC' :\n                     feedUrl.includes('buffer') ? 'Buffer' : 'WERSM';\n      const aiSources = ['Anthropic','OpenAI','VB','Verge','TC-AI'];\n      const isAI = aiSources.includes(source);\n      const isInstagram = isAI || source !== 'Buffer' || \n        (title + ' ' + desc).toLowerCase().includes('instagram') ||\n        (title + ' ' + desc).toLowerCase().includes('reels') ||\n        (title + ' ' + desc).toLowerCase().includes('meta');\n      if (title && link && isInstagram) {\n        allArticles.push({ title, link, desc, pubDate, source });\n      }\n    }\n  } catch (e) {}\n}\nallArticles.sort((a, b) => b.pubDate - a.pubDate);\nconst top5 = allArticles.slice(0, 10);\n\nif (pickNum < 1 || pickNum > top5.length) {\n  throw new Error('رقم غير صحيح. اختر من 1 إلى ' + top5.length);\n}\n\nconst chosen = top5[pickNum - 1];\nconst topicText = chosen.title + ' - ' + chosen.desc + ' (المصدر: ' + chosen.link + ')';\n\nreturn [{ json: { type: 'topic', originalText: topicText, chatId } }];"
+      },
+      "id": "0a2e2108-1b4b-4aad-94b4-f942105a6b49",
+      "name": "Pick News Article",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-api-error",
+              "leftValue": "={{ $json.type === 'error' || $json.error !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3c3d4e99-e8c3-438c-b6e3-cb134e94b9d3",
+      "name": "Check Claude Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "⚠️ سيرفر Claude مزدحم الحين. حاولت 3 مرات بالموديل الأساسي + جربت Haiku وما اشتغل. جرب بعد شوي.",
+        "additionalFields": {}
+      },
+      "id": "ca9326ba-58b1-403f-bef0-3df2c87435b7",
+      "name": "Telegram Error Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        64,
+        -64
+      ],
+      "webhookId": "4eee00e4-8082-42ee-9dbc-11ab4d760efb",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "YOUR_ANTHROPIC_API_KEY"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "id": "c18bbd2d-6d1b-40b6-9680-12f15d119a71",
+      "name": "Claude Content API1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-edit",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "edit",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "79347e0f-2c82-4ec1-8511-180ba60af344",
+      "name": "Is Edit?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2160,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "f4edf7ad-3df3-447f-bc59-29ce52a2a66d",
+      "name": "Read Rows for Edit",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1936,
+        144
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst editCmd = $('Parse Message').first().json.originalText.trim();\nconst chatId = $('Parse Message').first().json.chatId;\n\n// Read all rows and find last draft\nconst rows = $input.all();\nconst drafts = rows.filter(r => r.json.status === 'draft');\nif (!drafts.length) {\n  return [{ json: { error: true, chatId, message: '⚠️ ما في كاروسيل جاهز للتعديل. أرسل موضوع أول.' } }];\n}\nconst lastDraft = drafts[drafts.length - 1];\nconst rowId = lastDraft.json.id;\n\n// Parse content JSON\nlet raw = lastDraft.json.content || '';\nlet start = raw.indexOf('{');\nlet end = raw.lastIndexOf('}');\nlet content;\ntry {\n  content = JSON.parse(raw.substring(start, end + 1));\n} catch(e) {\n  return [{ json: { error: true, chatId, message: '⚠️ ما قدرت أقرأ المحتوى من الشيت.' } }];\n}\n\n// Parse the command\nlet slideNum = -1;\nlet field = '';\nlet newText = '';\nlet oldWord = '';\nlet isWordReplace = false;\n\nconst slideMatch = editCmd.match(/^s(\\d+):\\s*(.+)/i);\nconst captionMatch = editCmd.match(/^caption:\\s*(.+)/i);\nconst hashtagsMatch = editCmd.match(/^hashtags:\\s*(.+)/i);\n\nif (slideMatch) {\n  slideNum = parseInt(slideMatch[1]) - 1;\n  const rest = slideMatch[2].trim();\n  // Check if it's word replacement: old > new\n  const replaceMatch = rest.match(/^(.+?)\\s*>\\s*(.+)$/);\n  if (replaceMatch) {\n    oldWord = replaceMatch[1].trim();\n    newText = replaceMatch[2].trim();\n    isWordReplace = true;\n  } else {\n    newText = rest;\n  }\n} else if (captionMatch) {\n  content.caption = captionMatch[1].trim();\n} else if (hashtagsMatch) {\n  content.hashtags = hashtagsMatch[1].trim();\n}\n\n// Apply edit to slide\nif (slideNum >= 0) {\n  if (!content.slides || !content.slides[slideNum]) {\n    return [{ json: { error: true, chatId, message: `⚠️ ما في سلايد رقم ${slideNum + 1}` } }];\n  }\n  const slide = content.slides[slideNum];\n\n  if (isWordReplace) {\n    // Replace old word in ALL text fields of this slide\n    const replaceInObj = (obj) => {\n      for (const key of Object.keys(obj)) {\n        if (typeof obj[key] === 'string') {\n          obj[key] = obj[key].split(oldWord).join(newText);\n        } else if (Array.isArray(obj[key])) {\n          obj[key] = obj[key].map(item =>\n            typeof item === 'string' ? item.split(oldWord).join(newText) : item\n          );\n        }\n      }\n    };\n    replaceInObj(slide);\n  } else {\n    // Replace main text based on slide type\n    if (slide.type === 'cover') slide.title_line1 = newText;\n    else if (slide.type === 'stat') slide.label = newText;\n    else if (slide.type === 'one_liner') slide.text = newText;\n    else if (slide.type === 'cta') slide.question = newText;\n    else if (slide.title !== undefined) slide.title = newText;\n    else if (slide.points) slide.points[0] = newText;\n    else if (slide.steps) slide.steps[0] = newText;\n    else if (slide.quote !== undefined) slide.quote = newText;\n  }\n}\n\nconst updatedContent = JSON.stringify(content);\n\nreturn [{ json: { rowId, updatedContent, content, chatId, error: false } }];\n"
+      },
+      "id": "7464a10b-1071-45c8-99bd-60643d6094ba",
+      "name": "Apply Edit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1712,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.rowId }}",
+            "content": "={{ $json.updatedContent }}",
+            "status": "draft"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b6052dba-75cb-4abb-af99-14022ef09b94",
+      "name": "Save Edit",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1488,
+        144
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst chatId = $('Apply Edit').first().json.chatId;\nconst content = $('Apply Edit').first().json.content;\n\nconst topic = content.topic || '';\nlet preview = '✏️ تم التعديل!\\n\\n';\npreview += '📌 الموضوع: ' + topic + '\\n';\npreview += '🔢 عدد السلايدات: ' + content.slides.length + '\\n\\n';\n\ncontent.slides.forEach((s, i) => {\n  preview += '━━━ سلايد ' + (i+1) + ' (' + s.type + ') ━━━\\n';\n\n  if (s.type === 'cover') {\n    if (s.eyebrow) preview += s.eyebrow + '\\n';\n    preview += (s.title_line1||'') + ' ' + (s.title_line2_grad||'') + ' ' + (s.title_line3||'') + '\\n';\n    if (s.pill) preview += '🏷 ' + s.pill + '\\n';\n  }\n  else if (s.type === 'stat') {\n    preview += '🔢 ' + (s.number||'') + '\\n';\n    preview += '📍 ' + (s.label||'') + '\\n';\n    if (s.description) preview += s.description + '\\n';\n  }\n  else if (s.type === 'how_to') {\n    preview += '📝 ' + (s.title||'') + '\\n';\n    (s.steps||[]).forEach((step, j) => { preview += (j+1) + '. ' + step + '\\n'; });\n  }\n  else if (s.type === 'why_matters') {\n    preview += '💡 ' + (s.title||'') + '\\n';\n    (s.points||[]).forEach((p, j) => { preview += (j+1) + '. ' + p + '\\n'; });\n  }\n  else if (s.type === 'save') {\n    preview += '🔖 ' + (s.title||'احفظ هالمعلومات') + '\\n';\n    (s.points||[]).forEach((p, j) => { preview += (j+1) + '. ' + p + '\\n'; });\n  }\n  else if (s.type === 'warning') {\n    preview += '⚠️ ' + (s.title||'انتبه!') + '\\n';\n    (s.points||[]).forEach((p, j) => { preview += (j+1) + '. ' + p + '\\n'; });\n  }\n  else if (s.type === 'one_liner') {\n    preview += '💬 ' + (s.text||'') + '\\n';\n  }\n  else if (s.type === 'quote') {\n    preview += '💬 \"' + (s.quote||'') + '\"\\n';\n    preview += '— ' + (s.author||'') + (s.role ? ' (' + s.role + ')' : '') + '\\n';\n  }\n  else if (s.type === 'comparison') {\n    preview += (s.col1_header||'') + ' vs ' + (s.col2_header||'') + '\\n';\n    (s.rows||[]).forEach(r => { preview += '• ' + r[0] + ' | ' + r[1] + '\\n'; });\n  }\n  else if (s.type === 'cta') {\n    preview += '❓ ' + (s.question||'') + '\\n';\n    if (s.options) s.options.forEach((o, j) => {\n      preview += String.fromCharCode(65+j) + ') ' + o + '\\n';\n    });\n  }\n  preview += '\\n';\n});\n\nif (content.caption) preview += '━━━ الكابشن ━━━\\n' + content.caption + '\\n\\n';\nif (content.hashtags) preview += '━━━ الهاشتاقات ━━━\\n' + content.hashtags + '\\n\\n';\n\npreview += '💬 أرسل approve للتصميم\\n\\n✏️ أو عدّل:\\ns2: قديم > جديد\\ncaption: نص جديد';\n\nreturn [{ json: { preview, chatId } }];\n"
+      },
+      "id": "a1355cef-2db5-4693-a44e-d75637119dda",
+      "name": "Format Edit Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.preview }}",
+        "additionalFields": {}
+      },
+      "id": "6f2107bf-699d-40f9-b45a-ede7a81c224e",
+      "name": "Send Edit Preview",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        144
+      ],
+      "webhookId": "99d33b6e-0149-4f4b-b891-9af79cb3283e",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const topic = $json.originalText || \"\";\n\nconst text = topic.toLowerCase();\n\nlet trend = 60;\nlet viral = 60;\n\n// كلمات تدل على ترند\nconst trendingWords = [\n\"جديد\",\"ترند\",\"خبر\",\"أخيراً\",\"الآن\",\"اليوم\",\n\"AI\",\"ChatGPT\",\"OpenAI\",\"Meta\",\"Instagram\",\n\"TikTok\",\"YouTube\",\"Apple\",\"Google\",\"Elon\"\n];\n\ntrendingWords.forEach(word=>{\n  if(text.includes(word.toLowerCase())){\n    trend += 5;\n    viral += 4;\n  }\n});\n\n// الطول المناسب\nif(topic.length > 40 && topic.length < 180){\n    viral += 8;\n}\n\n// وجود أرقام\nif(/\\d/.test(topic)){\n    viral += 5;\n}\n\n// وجود سؤال\nif(topic.includes(\"؟\") || topic.includes(\"?\")){\n    viral += 8;\n}\n\n// سقف أعلى\ntrend = Math.min(trend,100);\nviral = Math.min(viral,100);\n\nreturn [{\njson:{\n...$json,\ntrend_score:trend,\nviral_score:viral\n}\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2528,
+        656
+      ],
+      "id": "3f962e0d-e03b-46e2-af39-eabed5e2d97b",
+      "name": "Trend & Viral Score"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "75f3a35f-4fdc-4933-9ac2-2dd594e5d15e",
+              "leftValue": "=={{ $('Generate Individual Slides').item.json.slideNumber }}",
+              "rightValue": "=={{ $('Generate Individual Slides').item.json.totalSlides }}",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        576
+      ],
+      "id": "66bff386-c471-4c65-85d2-d9200968f592",
+      "name": "Is Last Slide?"
+    },
+    {
+      "parameters": {
+        "chatId": "=={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "=={{\n  '📝 الكابشن:\\n\\n' +\n  $('Generate Individual Slides').item.json.caption +\n  '\\n\\n' +\n  $('Generate Individual Slides').item.json.hashtags +\n  '\\n\\n✅ جاهز للنشر'\n}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        560
+      ],
+      "id": "0ead03b6-d1d6-4163-a853-9591530df216",
+      "name": "Send Caption",
+      "webhookId": "615493e7-53bb-4a49-84fe-d8d211d97a16",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Message": {
+      "main": [
+        [
+          {
+            "node": "Trend & Viral Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Topic?": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Edit?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Format Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Preview": {
+      "main": [
+        [
+          {
+            "node": "Send Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Approve?": {
+      "main": [
+        [
+          {
+            "node": "Send Designing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Post?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Designing": {
+      "main": [
+        [
+          {
+            "node": "Read Draft Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Draft Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Last Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Draft": {
+      "main": [
+        [
+          {
+            "node": "Update to Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update to Approved": {
+      "main": [
+        [
+          {
+            "node": "Generate All Slides HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate All Slides HTML": {
+      "main": [
+        [
+          {
+            "node": "Send HTML File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Export?": {
+      "main": [
+        [
+          {
+            "node": "Send Exporting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is News?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Exporting": {
+      "main": [
+        [
+          {
+            "node": "Read Approved Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Approved Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Last Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Approved": {
+      "main": [
+        [
+          {
+            "node": "Update to Exported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update to Exported": {
+      "main": [
+        [
+          {
+            "node": "Generate Individual Slides",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Individual Slides": {
+      "main": [
+        [
+          {
+            "node": "HCTI API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HCTI API": {
+      "main": [
+        [
+          {
+            "node": "Aggregate HCTI URLs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Send Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate HCTI URLs": {
+      "main": [
+        [
+          {
+            "node": "Collect Image URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Image URLs": {
+      "main": [
+        [
+          {
+            "node": "Save Image URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Image URLs": {
+      "main": [
+        [
+          {
+            "node": "Send Post Hint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Post?": {
+      "main": [
+        [
+          {
+            "node": "Send Posting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Export?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Posting": {
+      "main": [
+        [
+          {
+            "node": "Read Exported Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Exported Rows": {
+      "main": [
+        [
+          {
+            "node": "Get Last Exported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Exported": {
+      "main": [
+        [
+          {
+            "node": "Create Image Containers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Image Containers": {
+      "main": [
+        [
+          {
+            "node": "Update to Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update to Published": {
+      "main": [
+        [
+          {
+            "node": "Send Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Claude Request": {
+      "main": [
+        [
+          {
+            "node": "Claude Content API1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is News?": {
+      "main": [
+        [
+          {
+            "node": "Fetch RSS Feeds",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is News Pick?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch RSS Feeds": {
+      "main": [
+        [
+          {
+            "node": "Send News List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send News List": {
+      "main": [
+        [
+          {
+            "node": "Save News Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick News Article": {
+      "main": [
+        [
+          {
+            "node": "Build Claude Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is News Pick?": {
+      "main": [
+        [
+          {
+            "node": "Pick News Article",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Claude Error": {
+      "main": [
+        [
+          {
+            "node": "Telegram Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Content API1": {
+      "main": [
+        [
+          {
+            "node": "Check Claude Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Edit?": {
+      "main": [
+        [
+          {
+            "node": "Read Rows for Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Rows for Edit": {
+      "main": [
+        [
+          {
+            "node": "Apply Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Edit": {
+      "main": [
+        [
+          {
+            "node": "Save Edit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Edit": {
+      "main": [
+        [
+          {
+            "node": "Format Edit Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Edit Preview": {
+      "main": [
+        [
+          {
+            "node": "Send Edit Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trend & Viral Score": {
+      "main": [
+        [
+          {
+            "node": "Is Topic?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Image": {
+      "main": [
+        [
+          {
+            "node": "Is Last Slide?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Preview": {
+      "main": [
+        []
+      ]
+    },
+    "Is Last Slide?": {
+      "main": [
+        [
+          {
+            "node": "Send Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "711edec5-5396-44bd-a935-8ed7f63ce2b5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "53397f71bea1c14d52ce749f37d015786801bc56a7adf486832e697ff0a3ad21"
+  },
+  "nodeGroups": [],
+  "id": "Z48cKxIaAhf0zGDo",
+  "tags": []
+}
