@@ -598,7 +598,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nlet lastApproved = null;\nfor (let i = items.length - 1; i >= 0; i--) {\n  if (items[i].json.status === 'approved') {\n    lastApproved = items[i].json;\n    break;\n  }\n}\nif (!lastApproved) throw new Error('No approved rows found');\nreturn [{ json: { ...lastApproved, contentJson: lastApproved['content'] } }];"
+        "jsCode": "const items = $input.all();\nlet chosen = null;\nfor (const st of ['approved', 'exported', 'draft']) {\n  for (let i = items.length - 1; i >= 0; i--) {\n    if (items[i].json.status === st) { chosen = items[i].json; break; }\n  }\n  if (chosen) break;\n}\nif (!chosen && items.length) chosen = items[items.length - 1].json;\nif (!chosen) throw new Error('لا توجد صفوف في الجدول. أرسل موضوع أول.');\nreturn [{ json: { ...chosen, contentJson: chosen['content'] } }];"
       },
       "id": "10199978-490e-4bf2-82ed-9d6035398a2b",
       "name": "Get Last Approved",
@@ -1062,7 +1062,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nlet lastExported = null;\nfor (let i = items.length - 1; i >= 0; i--) {\n  if (items[i].json.status === 'exported') {\n    lastExported = items[i].json;\n    break;\n  }\n}\nif (!lastExported) throw new Error('No exported rows found');\n\nconst imageUrls = JSON.parse(lastExported.image_urls || '[]');\nconst caption = lastExported.caption || '';\n\nreturn [{ json: { ...lastExported, imageUrls, caption, imageCount: imageUrls.length } }];"
+        "jsCode": "const items = $input.all();\nlet chosen = null;\nfor (const st of ['exported', 'approved', 'published', 'draft']) {\n  for (let i = items.length - 1; i >= 0; i--) {\n    if (items[i].json.status === st) { chosen = items[i].json; break; }\n  }\n  if (chosen) break;\n}\nif (!chosen && items.length) chosen = items[items.length - 1].json;\nif (!chosen) throw new Error('لا توجد صفوف في الجدول.');\nconst imageUrls = JSON.parse(chosen.image_urls || '[]');\nconst caption = chosen.caption || '';\nreturn [{ json: { ...chosen, imageUrls, caption, imageCount: imageUrls.length } }];"
       },
       "id": "29012c24-9264-451f-bc4e-ad74b8dca497",
       "name": "Get Last Exported",
