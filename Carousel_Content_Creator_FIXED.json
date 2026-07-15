@@ -278,7 +278,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -397,7 +400,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -472,7 +478,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -594,7 +603,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -744,7 +756,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -795,7 +810,7 @@
       },
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 4000
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -815,7 +830,10 @@
       "position": [
         64,
         464
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -952,7 +970,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -1058,7 +1079,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -1156,7 +1180,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -1413,7 +1440,7 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 3000
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -1475,7 +1502,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
@@ -1563,7 +1593,10 @@
           "id": "uctOLYBHfayFRKKL",
           "name": "Google Sheets account"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
     },
     {
       "parameters": {
