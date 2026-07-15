@@ -776,7 +776,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=={{\\n{\\n  \"html\": $json.html,\\n  \"viewport_width\": 1080,\\n  \"viewport_height\": 1350,\\n  \"device_scale\": 2,\\n  \"ms_delay\": 600\\n}\\n}}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.html, viewport_width: 1080, viewport_height: 1350, device_scale: 2, ms_delay: 500 }) }}",
         "options": {}
       },
       "id": "3b108767-07d5-43db-a770-3c6b3a4b9694",
