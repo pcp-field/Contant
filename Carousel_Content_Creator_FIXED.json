@@ -422,11 +422,11 @@
         },
         "sheetName": {
           "__rl": true,
-          "value": "=Sheet1",
+          "value": "Sheet1",
           "mode": "name"
         },
         "columns": {
-          "mappingMode": "autoMapInputData",
+          "mappingMode": "defineBelow",
           "value": {
             "id": "={{ $json.id }}",
             "status": "approved"
@@ -624,7 +624,10 @@
         },
         "columns": {
           "mappingMode": "defineBelow",
-          "value": {},
+          "value": {
+            "id": "={{ $json.id }}",
+            "status": "exported"
+          },
           "matchingColumns": [
             "id"
           ],
