@@ -1625,8 +1625,8 @@
           "conditions": [
             {
               "id": "75f3a35f-4fdc-4933-9ac2-2dd594e5d15e",
-              "leftValue": "=={{ $('Generate Individual Slides').item.json.slideNumber }}",
-              "rightValue": "=={{ $('Generate Individual Slides').item.json.totalSlides }}",
+              "leftValue": "={{ Number($('Generate Individual Slides').item.json.slideNumber) }}",
+              "rightValue": "={{ Number($('Generate Individual Slides').item.json.totalSlides) }}",
               "operator": {
                 "type": "number",
                 "operation": "equals"
@@ -1649,8 +1649,8 @@
     },
     {
       "parameters": {
-        "chatId": "=={{ $('Telegram Trigger').first().json.message.chat.id }}",
-        "text": "=={{\n  '📝 الكابشن:\\n\\n' +\n  $('Generate Individual Slides').item.json.caption +\n  '\\n\\n' +\n  $('Generate Individual Slides').item.json.hashtags +\n  '\\n\\n✅ جاهز للنشر'\n}}",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{\n  '📝 الكابشن:\\n\\n' +\n  $('Generate Individual Slides').item.json.caption +\n  '\\n\\n' +\n  $('Generate Individual Slides').item.json.hashtags +\n  '\\n\\n✅ جاهز للنشر'\n}}",
         "additionalFields": {}
       },
       "type": "n8n-nodes-base.telegram",
