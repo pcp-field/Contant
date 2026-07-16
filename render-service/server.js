@@ -100,7 +100,8 @@ app.post('/render', async (req, res) => {
 app.post('/reel', async (req, res) => {
   // `audio` (optional): a public URL to a ROYALTY-FREE track (Pixabay/Mixkit/etc).
   // Do NOT use audio copied from other creators' posts — Instagram will mute/flag it.
-  const { content, perSlide = 2.6, fps = 24, audio } = req.body || {};
+  // `targetDuration` (default 30s): total reel length; per-slide time is derived from it.
+  const { content, targetDuration = 30, fps = 24, audio } = req.body || {};
   if (!content) return res.status(400).json({ error: 'content required' });
   let data;
   try {
@@ -110,14 +111,17 @@ app.post('/reel', async (req, res) => {
   const slides = Array.isArray(data.slides) ? data.slides : [];
   if (!slides.length) return res.status(400).json({ error: 'no slides' });
 
+  const N = slides.length;
+  // ~30s total, spread evenly across slides (min 2.5s each for readability)
+  const perSlide = Math.max(2.5, (Number(targetDuration) || 30) / N);
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reel-'));
   let page;
   try {
     page = await (await getBrowser()).newPage();
     await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
-    await page.setContent(design.buildReelDoc(slides, data), { waitUntil: 'networkidle0', timeout: 45000 });
+    await page.setContent(design.buildReelDoc(slides, data, perSlide), { waitUntil: 'networkidle0', timeout: 45000 });
     try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
-    const N = slides.length;
     const totalFrames = Math.round(N * perSlide * fps);
     const advanced = new Set();
     for (let f = 0; f < totalFrames; f++) {

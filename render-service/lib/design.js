@@ -118,12 +118,12 @@ const CSS = `
 .cic svg{width:100%;height:100%}
 .ct{font-size:40px;font-weight:800;color:${C.dark};line-height:1.35}
 /* animations only when .animate is on the stage (preview); static export stays fully visible */
-.stage.animate .rise{opacity:0;animation:rise .6s ease forwards}
+.stage.animate .rise{opacity:0;animation:rise .75s cubic-bezier(.22,.61,.36,1) forwards}
 .stage.animate .kick.rise{animation-delay:.05s}
 .stage.animate .head.rise{animation-delay:.18s}
 .stage.animate .sub.rise{animation-delay:.34s}
 .stage.animate .pop{opacity:0;animation:pop .7s cubic-bezier(.2,.8,.3,1) forwards}
-.stage.animate .ni,.stage.animate .cd{opacity:0;animation:rise .55s ease forwards;animation-delay:var(--d)}
+.stage.animate .ni,.stage.animate .cd{opacity:0;animation:rise .65s cubic-bezier(.22,.61,.36,1) forwards;animation-delay:var(--d)}
 .stage.animate .progress .seg.on{transform:scaleX(0);animation:grow .5s ease forwards}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 .stage.animate .hero-ic,.stage.animate .stat-ic{animation:pop .7s cubic-bezier(.2,.8,.3,1) forwards, floaty 3.2s ease-in-out 1s infinite}
@@ -145,14 +145,18 @@ function buildPreviewDoc(slides, data){
   .captitle{color:#C1714E;font-size:26px;font-weight:800;margin-bottom:14px}.captext{color:#2C2A27;font-size:26px;line-height:1.9;white-space:pre-line}.caphash{color:#9A9186;font-size:24px;margin-top:16px}`;
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${esc(data.topic||'فطين')}</title><style>${CSS}\n${pcss}</style></head><body>${stages}${cap}</body></html>`;
 }
-function buildReelDoc(slides, data){
+function buildReelDoc(slides, data, perSlide){
   const N = slides.length;
+  const sd = perSlide || 5;
   const stages = slides.map((s,i)=>`<div class="reel-slide">${buildStage(s,i,N,data,true)}</div>`).join('');
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><style>${CSS}
   html,body{width:1080px;height:1350px;margin:0;overflow:hidden;background:${C.bg}}
-  .reel-slide{position:absolute;inset:0;opacity:0}
-  .reel-slide.show{opacity:1}
-  .reel-slide .stage{width:1080px;height:1350px}</style></head><body>${stages}
+  .reel-slide{position:absolute;inset:0;opacity:0;transition:opacity .55s ease}
+  .reel-slide.show{opacity:1;z-index:2}
+  .reel-slide .stage{width:1080px;height:1350px;transform-origin:center}
+  @keyframes kenburns{from{transform:scale(1.0)}to{transform:scale(1.05)}}
+  .reel-slide.show .stage{animation:kenburns ${sd}s ease-out both}
+  </style></head><body>${stages}
   <script>
   var els=[].slice.call(document.querySelectorAll('.reel-slide'));
   function show(i){els.forEach(function(el){el.classList.remove('show');var st=el.querySelector('.stage');if(st){st.classList.remove('animate');void st.offsetWidth;}});var el=els[i];el.classList.add('show');var st=el.querySelector('.stage');if(st){void st.offsetWidth;st.classList.add('animate');}}
