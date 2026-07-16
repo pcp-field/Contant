@@ -26,7 +26,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const msg = ($input.first().json.message?.text || '').trim().toLowerCase();\nconst chatId = $input.first().json.message?.chat?.id || '';\nlet type = 'other';\nlet originalText = $input.first().json.message?.text || '';\n\nif (msg === 'approve' || msg === 'موافق') type = 'approve';\nelse if (msg === 'export' || msg === 'صدر' || msg === 'تصدير') type = 'export';\nelse if (msg === 'post' || msg === 'انشر' || msg === 'نشر') type = 'post';\nelse if (msg === 'أخبار' || msg === 'اخبار' || msg === 'news' || msg === 'عالمي' || msg === 'عالمية' || msg === 'بحث' || msg === 'world') type = 'news';\nelse if (/^\\d+$/.test(msg) && parseInt(msg) >= 1 && parseInt(msg) <= 10) {\n  const pickNum = parseInt(msg);\n  const staticData = $getWorkflowStaticData('global');\n  const cached = staticData.newsCache;\n  const cacheAge = Date.now() - (staticData.newsCacheAt || 0);\n  if (cached && cacheAge < 3600000 && pickNum <= cached.length) {\n    const chosen = cached[pickNum - 1];\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({ method: 'GET', url: chosen.link, headers: { 'Accept': 'text/html' } });\n      let body = page;\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '').replace(/<style[^>]*>.*?<\\/style>/gs, '').replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch(e) { fullContent = chosen.desc; }\n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n    return [{ json: { type, originalText, chatId } }];\n  }\n  // Fallback: re-fetch if no cache\n  const RSS_FEEDS = [\n  'https://www.mentalfloss.com/rss.xml',\n  'https://www.smithsonianmag.com/rss/latest_articles/',\n  'https://www.iflscience.com/rss',\n  'https://www.openculture.com/feed',\n  'https://bigthink.com/feed/',\n  'https://www.sciencedaily.com/rss/all.xml',\n  'https://www.atlasobscura.com/feeds/latest',\n  'http://feeds.bbci.co.uk/news/world/rss.xml',\n  'https://feeds.npr.org/1001/rss.xml',\n  'https://lithub.com/feed/'\n];\n  const allArticles = [];\n  for (const feedUrl of RSS_FEEDS) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'GET', url: feedUrl,\n        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n      });\n      const xml = typeof res === 'string' ? res : JSON.stringify(res);\n      const items = xml.split('<item>').slice(1, 8);\n      for (const item of items) {\n        const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n        const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n        const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n        const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n        const contentMatch = item.match(/<content:encoded><!\\[CDATA\\[(.+?)\\]\\]>/s);\n        const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n        const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n        let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n        desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n        const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n        const source = (function(){ try { return feedUrl.split('/')[2].replace('www.','').split('.')[0]; } catch(e){ return 'مصدر'; } })();\n        if (title && link) allArticles.push({ title, link, desc, pubDate, source });\n      }\n    } catch (e) {}\n  }\n  allArticles.sort((a, b) => b.pubDate - a.pubDate);\n  const top5 = allArticles.slice(0, 10);\n  if (pickNum <= top5.length) {\n    const chosen = top5[pickNum - 1];\n    \n    // Fetch full article content\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({\n        method: 'GET', url: chosen.link,\n        headers: { 'Accept': 'text/html' }\n      });\n      // Extract text from article body\n      let body = page;\n      // Try to find article/post content area\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || \n                           body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      // Remove scripts, styles, tags\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '');\n      body = body.replace(/<style[^>]*>.*?<\\/style>/gs, '');\n      body = body.replace(/<[^>]*>/g, ' ');\n      body = body.replace(/&[^;]+;/g, ' ');\n      body = body.replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch (e) {\n      fullContent = chosen.desc;\n    }\n    \n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n  }\n}\nelse if (/^s\\d+:/i.test(msg) || /^caption:/i.test(msg) || /^hashtags:/i.test(msg)) type = 'edit';\nelse if (msg === 'أفكار' || msg === 'افكار' || msg === 'اقتراحات' || msg === 'مواضيع' || msg === 'ideas' || msg === 'suggest') type = 'ideas';\nelse if (msg.length > 2) type = 'topic';\n\nreturn [{ json: { type, originalText, chatId } }];"
+        "jsCode": "const msg = ($input.first().json.message?.text || '').trim().toLowerCase();\nconst chatId = $input.first().json.message?.chat?.id || '';\nlet type = 'other';\nlet originalText = $input.first().json.message?.text || '';\n\nif (msg === 'approve' || msg === 'موافق') type = 'approve';\nelse if (msg === 'export' || msg === 'صدر' || msg === 'تصدير') type = 'export';\nelse if (msg === 'post' || msg === 'انشر' || msg === 'نشر') type = 'post';\nelse if (msg === 'أخبار' || msg === 'اخبار' || msg === 'news' || msg === 'عالمي' || msg === 'عالمية' || msg === 'بحث' || msg === 'world') type = 'news';\nelse if (/^\\d+$/.test(msg) && parseInt(msg) >= 1 && parseInt(msg) <= 10) {\n  const pickNum = parseInt(msg);\n  const staticData = $getWorkflowStaticData('global');\n  const cached = staticData.newsCache;\n  const cacheAge = Date.now() - (staticData.newsCacheAt || 0);\n  if (cached && cacheAge < 3600000 && pickNum <= cached.length) {\n    const chosen = cached[pickNum - 1];\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({ method: 'GET', url: chosen.link, headers: { 'Accept': 'text/html' } });\n      let body = page;\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '').replace(/<style[^>]*>.*?<\\/style>/gs, '').replace(/<[^>]*>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch(e) { fullContent = chosen.desc; }\n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n    return [{ json: { type, originalText, chatId } }];\n  }\n  // Fallback: re-fetch if no cache\n  const RSS_FEEDS = [\n  'https://www.mentalfloss.com/rss.xml',\n  'https://www.smithsonianmag.com/rss/latest_articles/',\n  'https://www.iflscience.com/rss',\n  'https://www.openculture.com/feed',\n  'https://bigthink.com/feed/',\n  'https://www.sciencedaily.com/rss/all.xml',\n  'https://www.atlasobscura.com/feeds/latest',\n  'http://feeds.bbci.co.uk/news/world/rss.xml',\n  'https://feeds.npr.org/1001/rss.xml',\n  'https://lithub.com/feed/'\n];\n  const allArticles = [];\n  for (const feedUrl of RSS_FEEDS) {\n    try {\n      const res = await this.helpers.httpRequest({\n        method: 'GET', url: feedUrl,\n        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }\n      });\n      const xml = typeof res === 'string' ? res : JSON.stringify(res);\n      const items = xml.split('<item>').slice(1, 8);\n      for (const item of items) {\n        const titleMatch = item.match(/<title><!\\[CDATA\\[(.+?)\\]\\]>|<title>(.+?)<\\/title>/);\n        const linkMatch = item.match(/<link>(.+?)<\\/link>|<link><!\\[CDATA\\[(.+?)\\]\\]>/);\n        const descMatch = item.match(/<description><!\\[CDATA\\[(.+?)\\]\\]>|<description>(.+?)<\\/description>/s);\n        const dateMatch = item.match(/<pubDate>(.+?)<\\/pubDate>/);\n        const contentMatch = item.match(/<content:encoded><!\\[CDATA\\[(.+?)\\]\\]>/s);\n        const title = (titleMatch ? (titleMatch[1] || titleMatch[2]) : '').trim();\n        const link = (linkMatch ? (linkMatch[1] || linkMatch[2]) : '').trim();\n        let desc = (descMatch ? (descMatch[1] || descMatch[2]) : '').trim();\n        desc = desc.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').substring(0, 120).trim();\n        const pubDate = dateMatch ? new Date(dateMatch[1]).getTime() : 0;\n        const source = (function(){ try { return feedUrl.split('/')[2].replace('www.','').split('.')[0]; } catch(e){ return 'مصدر'; } })();\n        if (title && link) allArticles.push({ title, link, desc, pubDate, source });\n      }\n    } catch (e) {}\n  }\n  allArticles.sort((a, b) => b.pubDate - a.pubDate);\n  const top5 = allArticles.slice(0, 10);\n  if (pickNum <= top5.length) {\n    const chosen = top5[pickNum - 1];\n    \n    // Fetch full article content\n    let fullContent = '';\n    try {\n      const page = await this.helpers.httpRequest({\n        method: 'GET', url: chosen.link,\n        headers: { 'Accept': 'text/html' }\n      });\n      // Extract text from article body\n      let body = page;\n      // Try to find article/post content area\n      const articleMatch = body.match(/<article[^>]*>(.*?)<\\/article>/s) || \n                           body.match(/<div[^>]*class=\"[^\"]*(?:entry-content|post-content|article-content|content-area)[^\"]*\"[^>]*>(.*?)<\\/div>/s);\n      if (articleMatch) body = articleMatch[1];\n      // Remove scripts, styles, tags\n      body = body.replace(/<script[^>]*>.*?<\\/script>/gs, '');\n      body = body.replace(/<style[^>]*>.*?<\\/style>/gs, '');\n      body = body.replace(/<[^>]*>/g, ' ');\n      body = body.replace(/&[^;]+;/g, ' ');\n      body = body.replace(/\\s+/g, ' ').trim();\n      fullContent = body.substring(0, 2000);\n    } catch (e) {\n      fullContent = chosen.desc;\n    }\n    \n    originalText = 'اكتب كاروسيل عن هالخبر. لخص النقاط المهمة واذا في خطوات وضحها بشكل مختصر:\\n\\nالعنوان: ' + chosen.title + '\\n\\nالمحتوى الكامل:\\n' + fullContent + '\\n\\nالمصدر: ' + chosen.link;\n    type = 'topic';\n  }\n}\nelse if (/^s\\d+:/i.test(msg) || /^caption:/i.test(msg) || /^hashtags:/i.test(msg)) type = 'edit';\nelse if (msg === 'ريل' || msg === 'reel' || msg === 'ريلز') type = 'reel';\nelse if (msg === 'أفكار' || msg === 'افكار' || msg === 'اقتراحات' || msg === 'مواضيع' || msg === 'ideas' || msg === 'suggest') type = 'ideas';\nelse if (msg.length > 2) type = 'topic';\n\nreturn [{ json: { type, originalText, chatId } }];"
       },
       "id": "03d9619c-9864-4e49-ae47-bd5d7ac74f5d",
       "name": "Parse Message",
@@ -777,9 +777,8 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://hcti.io/v1/image",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpBasicAuth",
+        "url": "https://YOUR-RENDER-APP.onrender.com/render",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -791,7 +790,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ html: $json.html, viewport_width: 1080, viewport_height: 1350, device_scale: 2, ms_delay: 500 }) }}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.html, width: 1080, height: 1350, scale: 2 }) }}",
         "options": {}
       },
       "id": "3b108767-07d5-43db-a770-3c6b3a4b9694",
@@ -802,12 +801,6 @@
         -160,
         464
       ],
-      "credentials": {
-        "httpBasicAuth": {
-          "id": "InygP5CM3ZEjEvoi",
-          "name": "Unnamed credential"
-        }
-      },
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2500
@@ -863,7 +856,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
-        "text": "👋 هلا فيك في بوت فطين!\n🧠 فطين — منصة الألعاب الثقافية والاجتماعية\n\n📝 أرسل لي أي موضوع أو معلومة، وأحوّلها لك كاروسيل جاهز للنشر.\n\n━━━━━━━━━━━━\n🎯 الأوامر\n━━━━━━━━━━━━\n📌 اكتب أي موضوع  ←  أجهّز لك المحتوى\n✅ موافق  ←  تصميم السلايدات\n📸 صدّر  ←  تصدير الصور\n📤 انشر  ←  نشر على إنستقرام\n🌍 عالمي  ←  أفكار من محتوى عالمي (رد برقم الفكرة)\n💡 أفكار  ←  مواضيع ثقافية جاهزة تقترحها لك\n\n━━━━━━━━━━━━\n✏️ التعديل\n━━━━━━━━━━━━\ns2: القديم > الجديد\ncaption: كابشن جديد\nhashtags: هاشتاقات جديدة\n\nجاهز نلعب؟ أرسل لي موضوعك 🚀",
+        "text": "👋 هلا فيك في بوت فطين!\n🧠 فطين — منصة الألعاب الثقافية والاجتماعية\n\n📝 أرسل لي أي موضوع أو معلومة، وأحوّلها لك كاروسيل جاهز للنشر.\n\n━━━━━━━━━━━━\n🎯 الأوامر\n━━━━━━━━━━━━\n📌 اكتب أي موضوع  ←  أجهّز لك المحتوى\n✅ موافق  ←  تصميم السلايدات\n📸 صدّر  ←  تصدير الصور\n📤 انشر  ←  نشر على إنستقرام\n🎬 ريل  ←  فيديو ريل متحرّك (٣٠ث)\n🌍 عالمي  ←  أفكار من محتوى عالمي (رد برقم الفكرة)\n💡 أفكار  ←  مواضيع ثقافية جاهزة تقترحها لك\n\n━━━━━━━━━━━━\n✏️ التعديل\n━━━━━━━━━━━━\ns2: القديم > الجديد\ncaption: كابشن جديد\nhashtags: هاشتاقات جديدة\n\nجاهز نلعب؟ أرسل لي موضوعك 🚀",
         "additionalFields": {}
       },
       "id": "6bd7e211-8384-448e-a95c-2dba6404c22a",
@@ -1771,6 +1764,164 @@
           "name": "Telegram account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-reel",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "reel",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "reel0000-1111-4a11-8a11-reel00000001",
+      "name": "Is Reel?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "🎬 قاعد أجهّز الريل (٣٠ ثانية)... خلّك معي، ياخذ شوي ⏳",
+        "additionalFields": {}
+      },
+      "id": "reel0000-2222-4a22-8a22-reel00000002",
+      "name": "Send Reel Wait",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1040,
+        1500
+      ],
+      "webhookId": "reelwh01-2222-4c22-8c22-reelwait0002",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1vd8CZ3E61j_biNotpka08nuljlBL7DViVpBc-Z5VGH4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "reel0000-3333-4a33-8a33-reel00000003",
+      "name": "Read Approved (Reel)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -816,
+        1500
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uctOLYBHfayFRKKL",
+          "name": "Google Sheets account"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet chosen = null;\nfor (const st of ['approved','exported','draft']) {\n  for (let i = items.length - 1; i >= 0; i--) {\n    if (items[i].json.status === st) { chosen = items[i].json; break; }\n  }\n  if (chosen) break;\n}\nif (!chosen && items.length) chosen = items[items.length - 1].json;\nif (!chosen) throw new Error('لا توجد صفوف. أرسل موضوع ووافق أول.');\nreturn [{ json: { ...chosen, contentJson: chosen['content'] } }];"
+      },
+      "id": "reel0000-4444-4a44-8a44-reel00000004",
+      "name": "Get Approved (Reel)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -592,
+        1500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR-RENDER-APP.onrender.com/reel",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $json.contentJson, targetDuration: 30 }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "reel0000-5555-4a55-8a55-reel00000005",
+      "name": "Generate Reel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        1500
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 15000
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "binaryData": false,
+        "fileId": "={{ $json.url }}",
+        "additionalFields": {
+          "caption": "🎬 ريلك جاهز (٣٠ ثانية)!\n\n📲 نزّله وانشره كـ Reel — وتقدر تضيف صوت رائج من مكتبة إنستقرام وقت النشر (أعلى وصول)."
+        }
+      },
+      "id": "reel0000-6666-4a66-8a66-reel00000006",
+      "name": "Send Reel",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        1500
+      ],
+      "webhookId": "reelwh02-6666-4c66-8c66-reelsend0006",
+      "credentials": {
+        "telegramApi": {
+          "id": "nOFPzdCN8v5X6UGA",
+          "name": "Telegram account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -1921,7 +2072,7 @@
         ],
         [
           {
-            "node": "Is News?",
+            "node": "Is Reel?",
             "type": "main",
             "index": 0
           }
@@ -2348,6 +2499,68 @@
         [
           {
             "node": "Send Ideas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Reel?": {
+      "main": [
+        [
+          {
+            "node": "Send Reel Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is News?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reel Wait": {
+      "main": [
+        [
+          {
+            "node": "Read Approved (Reel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Approved (Reel)": {
+      "main": [
+        [
+          {
+            "node": "Get Approved (Reel)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approved (Reel)": {
+      "main": [
+        [
+          {
+            "node": "Generate Reel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reel": {
+      "main": [
+        [
+          {
+            "node": "Send Reel",
             "type": "main",
             "index": 0
           }
