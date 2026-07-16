@@ -46,15 +46,32 @@ function uploadBuffer(buffer, resource_type, format) {
   });
 }
 
-function encodeMp4(dir, fps, out) {
+function runFfmpeg(args) {
   return new Promise((resolve, reject) => {
-    const args = ['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.png'),
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out];
     const p = spawn(ffmpegPath, args);
     let err = '';
     p.stderr.on('data', d => { err += d; });
     p.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code + ': ' + err.slice(-500))));
   });
+}
+
+function encodeMp4(dir, fps, out) {
+  return runFfmpeg(['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.png'),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]);
+}
+
+// Mux a (royalty-free) audio track over the video: loop audio, cut to video length.
+function muxAudio(video, audio, out) {
+  return runFfmpeg(['-y', '-i', video, '-stream_loop', '-1', '-i', audio,
+    '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k',
+    '-shortest', '-movflags', '+faststart', out]);
+}
+
+async function downloadTo(url, file) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('audio download failed: ' + resp.status);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  fs.writeFileSync(file, buf);
 }
 
 app.get('/', (req, res) => res.json({ ok: true, service: 'fateen-renderer', endpoints: ['/render', '/reel'] }));
@@ -81,7 +98,9 @@ app.post('/render', async (req, res) => {
 
 // ---- animated reel (mp4) ----
 app.post('/reel', async (req, res) => {
-  const { content, perSlide = 2.6, fps = 24 } = req.body || {};
+  // `audio` (optional): a public URL to a ROYALTY-FREE track (Pixabay/Mixkit/etc).
+  // Do NOT use audio copied from other creators' posts — Instagram will mute/flag it.
+  const { content, perSlide = 2.6, fps = 24, audio } = req.body || {};
   if (!content) return res.status(400).json({ error: 'content required' });
   let data;
   try {
@@ -108,8 +127,17 @@ app.post('/reel', async (req, res) => {
       await new Promise(r => setTimeout(r, 1000 / fps));
     }
     await page.close(); page = null;
-    const mp4 = path.join(dir, 'out.mp4');
+    let mp4 = path.join(dir, 'out.mp4');
     await encodeMp4(dir, fps, mp4);
+    if (audio) {
+      try {
+        const aFile = path.join(dir, 'audio_src');
+        await downloadTo(audio, aFile);
+        const withAudio = path.join(dir, 'final.mp4');
+        await muxAudio(mp4, aFile, withAudio);
+        mp4 = withAudio;
+      } catch (e) { /* if audio fails, fall back to silent video */ }
+    }
     const url = await uploadBuffer(fs.readFileSync(mp4), 'video', 'mp4');
     res.json({ url });
   } catch (e) {
