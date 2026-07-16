@@ -1,0 +1,124 @@
+// Fateen renderer — free unlimited HTML->PNG (carousel) and animated MP4 (reel).
+// Uploads to Cloudinary and returns { url }. Drop-in for HCTI on /render.
+//
+//   POST /render  { html, width?, height?, scale? }       -> { url }  (PNG)
+//   POST /reel    { content, perSlide?, fps? }             -> { url }  (MP4)
+//   GET  /                                                 -> health
+
+const express = require('express');
+const puppeteer = require('puppeteer');
+const ffmpegPath = require('ffmpeg-static');
+const { spawn } = require('child_process');
+const cloudinary = require('cloudinary').v2;
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const design = require('./lib/design.js');
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  secure: true
+});
+
+const app = express();
+app.use(express.json({ limit: '20mb' }));
+
+let _browser;
+async function getBrowser() {
+  if (!_browser || !_browser.connected) {
+    _browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars']
+    });
+  }
+  return _browser;
+}
+
+function uploadBuffer(buffer, resource_type, format) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type, format, folder: 'fateen' },
+      (err, result) => (err ? reject(err) : resolve(result.secure_url))
+    );
+    stream.end(buffer);
+  });
+}
+
+function encodeMp4(dir, fps, out) {
+  return new Promise((resolve, reject) => {
+    const args = ['-y', '-framerate', String(fps), '-i', path.join(dir, 'f%05d.png'),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out];
+    const p = spawn(ffmpegPath, args);
+    let err = '';
+    p.stderr.on('data', d => { err += d; });
+    p.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code + ': ' + err.slice(-500))));
+  });
+}
+
+app.get('/', (req, res) => res.json({ ok: true, service: 'fateen-renderer', endpoints: ['/render', '/reel'] }));
+
+// ---- carousel image ----
+app.post('/render', async (req, res) => {
+  const { html, width = 1080, height = 1350, scale = 2 } = req.body || {};
+  if (!html) return res.status(400).json({ error: 'html required' });
+  let page;
+  try {
+    page = await (await getBrowser()).newPage();
+    await page.setViewport({ width, height, deviceScaleFactor: scale });
+    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 45000 });
+    try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
+    await new Promise(r => setTimeout(r, 250));
+    const png = await page.screenshot({ type: 'png' });
+    await page.close();
+    res.json({ url: await uploadBuffer(png, 'image', 'png') });
+  } catch (e) {
+    if (page) try { await page.close(); } catch (_) {}
+    res.status(500).json({ error: String(e.message || e) });
+  }
+});
+
+// ---- animated reel (mp4) ----
+app.post('/reel', async (req, res) => {
+  const { content, perSlide = 2.6, fps = 24 } = req.body || {};
+  if (!content) return res.status(400).json({ error: 'content required' });
+  let data;
+  try {
+    const s = content.indexOf('{'), e = content.lastIndexOf('}');
+    data = JSON.parse(content.substring(s, e + 1));
+  } catch (e) { return res.status(400).json({ error: 'invalid content json' }); }
+  const slides = Array.isArray(data.slides) ? data.slides : [];
+  if (!slides.length) return res.status(400).json({ error: 'no slides' });
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reel-'));
+  let page;
+  try {
+    page = await (await getBrowser()).newPage();
+    await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
+    await page.setContent(design.buildReelDoc(slides, data), { waitUntil: 'networkidle0', timeout: 45000 });
+    try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
+    const N = slides.length;
+    const totalFrames = Math.round(N * perSlide * fps);
+    const advanced = new Set();
+    for (let f = 0; f < totalFrames; f++) {
+      const t = f / fps, si = Math.floor(t / perSlide);
+      if (si > 0 && !advanced.has(si)) { advanced.add(si); await page.evaluate('window.__advance && window.__advance()'); }
+      await page.screenshot({ path: path.join(dir, 'f' + String(f).padStart(5, '0') + '.png') });
+      await new Promise(r => setTimeout(r, 1000 / fps));
+    }
+    await page.close(); page = null;
+    const mp4 = path.join(dir, 'out.mp4');
+    await encodeMp4(dir, fps, mp4);
+    const url = await uploadBuffer(fs.readFileSync(mp4), 'video', 'mp4');
+    res.json({ url });
+  } catch (e) {
+    if (page) try { await page.close(); } catch (_) {}
+    res.status(500).json({ error: String(e.message || e) });
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log('fateen renderer listening on ' + PORT));

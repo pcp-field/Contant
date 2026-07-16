@@ -1,37 +1,59 @@
-# مُصمّم فطين — بديل HCTI مجاني وبلا حدود
+# مُصمّم فطين — صور (كاروسيل) + ريل متحرّك، مجاني وبلا حدود
 
-خدمة تحوّل HTML إلى صورة PNG بجودة عالية (Chrome حقيقي)، وتستضيف الصورة وترجّع **رابطًا عامًّا** —
-بنفس شكل ردّ HCTI (`{ "url": "..." }`) تمامًا، فلا يتغيّر أي شيء آخر في n8n.
+خدمة واحدة تسوّي شيئين، وترفع الناتج على **Cloudinary** وترجّع رابطًا دائمًا:
 
-## ليش؟
-- مجاني للأبد (ضمن حدود Vercel Hobby السخية) وبلا اشتراك.
-- جودة أعلى: Chromium حقيقي + الخطوط المضمّنة تظهر مضبوطة.
-- الصور تُحفظ على Vercel Blob (روابط دائمة) — تشتغل مع نشر إنستقرام.
+| المسار | يسوّي | الرد |
+|--------|-------|------|
+| `POST /render` | HTML → صورة PNG (بديل HCTI بالضبط) | `{ "url": "...png" }` |
+| `POST /reel`   | محتوى السلايدات → **فيديو MP4 متحرّك** | `{ "url": "...mp4" }` |
+| `GET /`        | فحص الصحة | `{ "ok": true }` |
 
-## خطوات النشر (٥ دقائق، مرة وحدة)
-1. ادخل https://vercel.com وسجّل دخول بحساب GitHub (مجاني).
-2. **Add New → Project** → استورد مستودع `pcp-field/Contant`.
-3. في إعداد المشروع، اضبط **Root Directory** = `render-service`.
-4. اضغط **Deploy** وانتظر ينتهي.
-5. فعّل التخزين: من صفحة المشروع → **Storage → Create → Blob** → اربطه بالمشروع.
-   (هذا يضيف متغيّر البيئة `BLOB_READ_WRITE_TOKEN` تلقائيًا.)
-6. أعد النشر (**Redeploy**) عشان يلتقط متغيّر Blob.
-7. رابطك صار: `https://<اسم-مشروعك>.vercel.app/api/render`
-   - تأكد: افتحه بالمتصفح (GET) لازم يرجّع `{"ok":true,...}`.
+- **مجاني للأبد** (Render.com free + Cloudinary free).
+- **جودة عالية**: Chrome حقيقي + الخطوط المضمّنة.
+- **روابط دائمة** (تشتغل مع نشر إنستقرام صور وريل).
 
-## ربطه في n8n (عقدة "HCTI API" — تعديل بسيط)
-- **URL** → `https://<اسم-مشروعك>.vercel.app/api/render`
-- **Authentication** → `None` (احذف الـ Basic Auth القديم).
-- **Send Body** → JSON، والمحتوى:
-  ```
-  ={{ JSON.stringify({ html: $json.html, width: 1080, height: 1350, scale: 2 }) }}
-  ```
-- الباقي زيّه (يرجّع `{ url }`، وعقدة "Download Image" و نشر إنستقرام يشتغلون بدون تغيير).
+## 1) نشر الخدمة على Render.com (مرة وحدة)
+1. ادخل https://render.com وسجّل بحساب GitHub (مجاني).
+2. **New → Web Service** → اختر مستودع `pcp-field/Contant`.
+3. الإعدادات:
+   - **Root Directory**: `render-service`
+   - **Runtime**: Docker (يلتقط `Dockerfile` تلقائيًا)
+   - **Instance Type**: Free
+4. **Environment** → أضف متغيّرات Cloudinary (من حسابك المجاني على cloudinary.com → Dashboard):
+   - `CLOUDINARY_CLOUD_NAME`
+   - `CLOUDINARY_API_KEY`
+   - `CLOUDINARY_API_SECRET`
+5. **Create Web Service** وانتظر النشر. رابطك يصير: `https://<اسمك>.onrender.com`
+   - تأكد: افتح الرابط (GET) لازم يرجّع `{"ok":true,...}`.
 
-## اختبار سريع
+> ملاحظة: الخطة المجانية "تنام" بعد ١٥ دقيقة خمول (أول طلب بعدها يتأخر ~٣٠-٦٠ ثانية ثم يشتغل). n8n مضبوط على إعادة المحاولة، فيتكفّل بهذا.
+
+## 2) اختبار سريع (curl)
 ```bash
-curl -X POST https://<اسم-مشروعك>.vercel.app/api/render \
+# صورة
+curl -X POST https://<اسمك>.onrender.com/render \
   -H "Content-Type: application/json" \
-  -d '{"html":"<h1 style=\"font-family:sans-serif\">مرحبا فطين</h1>"}'
+  -d '{"html":"<h1 style=\"font-family:sans-serif\">فطين</h1>"}'
+
+# ريل (مرّر نفس محتوى السلايدات JSON)
+curl -X POST https://<اسمك>.onrender.com/reel \
+  -H "Content-Type: application/json" \
+  -d '{"content":"{\"topic\":\"تجربة\",\"slides\":[{\"type\":\"cover\",\"title_line1\":\"مرحبا\",\"title_line2_grad\":\"فطين\"}]}"}'
 ```
-المفروض يرجّع `{ "url": "https://....png" }`.
+كل واحد يرجّع `{ "url": "..." }`.
+
+## 3) ربطه في n8n
+### الكاروسيل (استبدال HCTI مجانًا)
+عقدة **HCTI API**:
+- **URL** → `https://<اسمك>.onrender.com/render`
+- **Authentication** → None
+- **Body (JSON)** → `={{ JSON.stringify({ html: $json.html, width: 1080, height: 1350, scale: 2 }) }}`
+- الباقي زيّه (يرجّع `{url}`).
+
+### الريل (أمر "ريل")
+- في **Parse Message**: أضف كشف `ريل` / `reel` → `type = 'reel'`.
+- فرع جديد: `Is Reel?` → قراءة آخر محتوى معتمد → **HTTP POST** `/reel` بالجسم:
+  `={{ JSON.stringify({ content: $json.contentJson }) }}`
+  → ترجع `{url}` (رابط MP4) → أرسله للتلقرام (sendVideo) و/أو انشره كـ Reel على إنستقرام.
+
+> أرسل لي رابط خدمتك بعد النشر وأنا أجهّز لك فرع "ريل" كامل في الـ workflow (توليد + إرسال + نشر Reel على إنستقرام).
