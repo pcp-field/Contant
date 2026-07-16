@@ -119,7 +119,7 @@ app.post('/reel', async (req, res) => {
   let page;
   try {
     page = await (await getBrowser()).newPage();
-    await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
+    await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
     await page.setContent(design.buildReelDoc(slides, data, perSlide), { waitUntil: 'networkidle0', timeout: 45000 });
     try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
     const totalFrames = Math.round(N * perSlide * fps);

@@ -148,15 +148,21 @@ function buildPreviewDoc(slides, data){
 function buildReelDoc(slides, data, perSlide){
   const N = slides.length;
   const sd = perSlide || 5;
-  const stages = slides.map((s,i)=>`<div class="reel-slide">${buildStage(s,i,N,data,true)}</div>`).join('');
+  const stages = slides.map((s,i)=>`<div class="reel-slide"><div class="reel-frame">${buildStage(s,i,N,data,true)}</div></div>`).join('');
   return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><style>${CSS}
-  html,body{width:1080px;height:1350px;margin:0;overflow:hidden;background:${C.bg}}
-  .reel-slide{position:absolute;inset:0;opacity:0;transition:opacity .55s ease}
+  html,body{width:1080px;height:1920px;margin:0;overflow:hidden;background:${C.bg}}
+  .reel-slide{position:absolute;inset:0;opacity:0;transition:opacity .55s ease;display:flex;align-items:center;justify-content:center}
   .reel-slide.show{opacity:1;z-index:2}
-  .reel-slide .stage{width:1080px;height:1350px;transform-origin:center}
+  .reel-frame{width:1080px;height:1350px;position:relative;overflow:hidden;border-radius:8px}
+  .reel-frame .stage{width:1080px;height:1350px;transform-origin:center}
   @keyframes kenburns{from{transform:scale(1.0)}to{transform:scale(1.05)}}
-  .reel-slide.show .stage{animation:kenburns ${sd}s ease-out both}
-  </style></head><body>${stages}
+  .reel-slide.show .reel-frame .stage{animation:kenburns ${sd}s ease-out both}
+  .reel-brand{position:absolute;left:0;right:0;z-index:5;text-align:center;font-family:'Tajawal',sans-serif;color:${C.muted};font-weight:800;font-size:30px}
+  .reel-brand.top{top:150px}.reel-brand.bot{bottom:150px;color:${C.coral}}
+  </style></head><body>
+  <div class="reel-brand top">فطين • تعرف؟</div>
+  ${stages}
+  <div class="reel-brand bot">تابع للمزيد ↟</div>
   <script>
   var els=[].slice.call(document.querySelectorAll('.reel-slide'));
   function show(i){els.forEach(function(el){el.classList.remove('show');var st=el.querySelector('.stage');if(st){st.classList.remove('animate');void st.offsetWidth;}});var el=els[i];el.classList.add('show');var st=el.querySelector('.stage');if(st){void st.offsetWidth;st.classList.add('animate');}}
