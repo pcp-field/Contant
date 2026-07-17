@@ -74,6 +74,8 @@ const CSS = `
 @keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pop{0%{opacity:0;transform:scale(.7)}65%{transform:scale(1.06)}100%{opacity:1;transform:scale(1)}}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes hookpop{0%{opacity:0;transform:scale(.6)}68%{transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:.65}}
 .stage{position:relative;width:1080px;height:1350px;overflow:hidden;direction:rtl;
   font-family:'Tajawal',sans-serif;background:${C.bg};color:${C.dark}}
 .bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;opacity:.14}
@@ -127,6 +129,9 @@ const CSS = `
 .stage.animate .progress .seg.on{transform:scaleX(0);animation:grow .5s ease forwards}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 .stage.animate .hero-ic,.stage.animate .stat-ic{animation:pop .7s cubic-bezier(.2,.8,.3,1) forwards, floaty 3.2s ease-in-out 1s infinite}
+.stage.animate .key,.stage.animate .brush{display:inline-block;animation:hookpop .55s cubic-bezier(.2,.9,.3,1.15) both;animation-delay:.3s}
+.stage.animate .kick .kdot{animation:pulse 1.7s ease-in-out .9s infinite}
+.stage.animate .big{animation:hookpop .6s cubic-bezier(.2,.9,.3,1.12) both;animation-delay:.22s;display:inline-block}
 `;
 
 function buildStage(slide, idx, N, data, anim){
@@ -153,14 +158,16 @@ function buildReelDoc(slides, data, perSlide){
   html,body{width:1080px;height:1920px;margin:0;overflow:hidden;background:${C.bg}}
   .reel-slide{position:absolute;inset:0;opacity:0;transition:opacity .55s ease;display:flex;align-items:center;justify-content:center}
   .reel-slide.show{opacity:1;z-index:2}
-  .reel-frame{width:1080px;height:1350px;position:relative;overflow:hidden;border-radius:8px}
+  .reel-frame{width:1080px;height:1350px;position:relative;overflow:hidden;border-radius:10px;box-shadow:0 34px 90px rgba(20,16,10,0.22)}
   .reel-frame .stage{width:1080px;height:1350px;transform-origin:center}
   @keyframes kenburns{from{transform:scale(1.0)}to{transform:scale(1.05)}}
   .reel-slide.show .reel-frame .stage{animation:kenburns ${sd}s ease-out both}
-  .reel-brand{position:absolute;left:0;right:0;z-index:5;text-align:center;font-family:'Tajawal',sans-serif;color:${C.muted};font-weight:800;font-size:30px}
-  .reel-brand.top{top:150px}.reel-brand.bot{bottom:150px;color:${C.coral}}
+  .reel-brand{position:absolute;left:0;right:0;z-index:5;text-align:center;font-family:'Tajawal',sans-serif;font-weight:800}
+  .reel-brand.top{top:130px;font-size:40px;color:${C.dark};letter-spacing:.5px}
+  .reel-brand.top b{color:${C.coral}}
+  .reel-brand.bot{bottom:130px;font-size:30px;color:${C.coral}}
   </style></head><body>
-  <div class="reel-brand top">فطين • تعرف؟</div>
+  <div class="reel-brand top">فطين <b>•</b> تعرف؟</div>
   ${stages}
   <div class="reel-brand bot">تابع للمزيد ↟</div>
   <script>
