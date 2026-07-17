@@ -30,7 +30,7 @@ async function getBrowser() {
   if (!_browser || !_browser.connected) {
     _browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars']
+      args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--hide-scrollbars', '--disable-extensions', '--disable-background-networking', '--disable-features=site-per-process,TranslateUI', '--renderer-process-limit=1', '--js-flags=--max-old-space-size=380']
     });
   }
   return _browser;
