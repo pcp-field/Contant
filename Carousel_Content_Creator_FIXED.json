@@ -777,7 +777,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR-RENDER-APP.onrender.com/render",
+        "url": "https://fateen-renderer.onrender.com/render",
         "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
@@ -1868,7 +1868,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://YOUR-RENDER-APP.onrender.com/reel",
+        "url": "https://fateen-renderer.onrender.com/reel",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
