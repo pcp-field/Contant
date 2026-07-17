@@ -790,7 +790,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ html: $json.html, width: 1080, height: 1350, scale: 2 }) }}",
+        "jsonBody": "={{ JSON.stringify({ html: $json.html, width: 1080, height: 1350, scale: 1 }) }}",
         "options": {}
       },
       "id": "3b108767-07d5-43db-a770-3c6b3a4b9694",

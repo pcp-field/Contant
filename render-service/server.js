@@ -84,9 +84,9 @@ app.post('/render', async (req, res) => {
   try {
     page = await (await getBrowser()).newPage();
     await page.setViewport({ width, height, deviceScaleFactor: scale });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 45000 });
+    await page.setContent(html, { waitUntil: 'load', timeout: 45000 });
     try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 120));
     const png = await page.screenshot({ type: 'png' });
     await page.close();
     res.json({ url: await uploadBuffer(png, 'image', 'png') });
@@ -120,7 +120,7 @@ app.post('/reel', async (req, res) => {
   try {
     page = await (await getBrowser()).newPage();
     await page.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
-    await page.setContent(design.buildReelDoc(slides, data, perSlide), { waitUntil: 'networkidle0', timeout: 45000 });
+    await page.setContent(design.buildReelDoc(slides, data, perSlide), { waitUntil: 'load', timeout: 45000 });
     try { await page.evaluate(() => document.fonts && document.fonts.ready); } catch (e) {}
     const totalFrames = Math.round(N * perSlide * fps);
     const advanced = new Set();
